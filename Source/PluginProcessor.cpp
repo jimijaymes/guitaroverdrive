@@ -164,10 +164,14 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // RAT: frequency-selective high-gain op-amp followed by hard diodes to ground.
   const float ruetz=m1?amount:0.f;
   const float fat=m3?amount:0.f;
-  const float pre=s.preBass.hp(x,45.f+135.f*(1.f-fat),rate);
-  const float upper=s.preTop.lp(pre,juce::jmax(900.f,13000.f-7000.f*drive),rate);
-  const float opGain=1.f+90.f*drive*drive*(1.f-.58f*ruetz);
-  const float desired=upper*opGain;
+  // RAT gain network has two independent feedback high-pass branches:
+  // 47R/2.2uF ~1.54 kHz and 560R/4.7uF ~60.5 Hz. Ruetz changes
+  // the 47R leg; the 560R leg remains in circuit.
+  const float hpFast=s.preBass.hp(x,1539.f*(1.f+12.f*ruetz),rate);
+  const float hpSlow=s.preMid.hp(x,60.5f*(1.f-.65f*fat),rate);
+  const float upper=s.preTop.lp(x,20000.f,rate);
+  const float opGain=1.f+((100000.f*drive*drive)/47.f)*(.18f)* (1.f-.58f*ruetz);
+  const float desired=upper+hpFast*(opGain-1.f)*.55f+hpSlow*(opGain-1.f)*.45f;
   // LM308-style slew-limited stage, with op-amp supply rail approximation.
   const float maxStep=juce::jmax(.00001f,300000.f/rate/9.f);
   s.opamp+=juce::jlimit(-maxStep,maxStep,desired-s.opamp);
