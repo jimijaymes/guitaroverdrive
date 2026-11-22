@@ -245,7 +245,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
     const float negative=1.7f;
     b=diode(a,positive,negative);
    }else b=clip(a,clipping);
-   const float low=s.newBass.lp(b,(modCircuit>0?250.f:320.f)+350.f*bass,rate);
+   const float low=s.newBass.lp(b,(modCircuit==3?195.f:(modCircuit>0?250.f:320.f))+350.f*bass,rate);
    const float high=b-s.newTreble.lp(b,900.f+2200.f*treble,rate);
    y=(1.f-tone)*low+tone*high;
   }else if(model==8){ // OD-2: normal and turbo use different gain distribution
