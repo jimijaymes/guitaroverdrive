@@ -201,8 +201,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
   const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):feedbackClip(b,clipping,ram?3.8f:3.2f);
-  const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*a3,rate);
-  const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*a4,rate);
+  const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*(m3?a3:0.f),rate);
+  const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*(m4?a4:0.f),rate);
   const float scoop=m2?(.15f+.85f*a2):(m4?.15f:1.f);
   const float scooped=low*(1.f-tone)+high*tone;
   const float flat=.55f*second+.45f*scooped;
@@ -217,7 +217,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const bool dual=parameters.getRawParameterValue("dualMode")->load()>.5f;
   const float bass=parameters.getRawParameterValue("pedalBass")->load()*.01f;
   const float treble=parameters.getRawParameterValue("pedalTreble")->load()*.01f;
-  const float fat=m1?a1:0.f, bright=m2?modTone:0.f;
+  const float fat=m1?a1:0.f, bright=m2?a2:0.f;
   const float hpf[]={95.f,120.f,35.f,110.f,75.f,90.f,75.f};
   const float lpf[]={12500.f,10500.f,17000.f,11500.f,13500.f,12500.f,15500.f};
   const int idx=model-4;
