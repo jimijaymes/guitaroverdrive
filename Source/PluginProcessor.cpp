@@ -64,8 +64,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("input","Input dB",-24,24,0);f("drive","Drive %",0,100,50);f("tone","Tone %",0,100,50);f("level","Level dB",-36,18,0);f("mix","Mix %",0,100,100);
  f("modAmount","Mod Amount %",0,100,50);f("modTone","Mod Tone %",0,100,50);f("modBass","Mod Bass %",0,100,50);
  f("transformerDrive","Transformer Drive dB",-24,24,0);
+ f("tcBoostGain","TC Preamp Boost dB",0,24,12);
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
+ p.add(std::make_unique<C>(juce::ParameterID{"tcBoostPosition",1},"TC Preamp Boost",juce::StringArray{"Off","Pre Pedal","Post Pedal"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"feedbackCap",1},"TS9 / SD-1 HPF Capacitor",juce::StringArray{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
@@ -112,6 +114,20 @@ float GuitarOverdriveProcessor::transformer(float x,int channel,float drive,floa
  const float amp=(std::tanh(x*ampGain+offset)-std::tanh(offset))/juce::jmax(.1f,ampGain);
  const float blend=.14f+.36f*character;
  return (1.f-blend)*x+blend*amp+coreDist-(x-high)*(.015f+.065f*character);
+}
+float GuitarOverdriveProcessor::tcBoost(float x,int channel,float boostDb,float rate,bool pre){
+ auto& st=states[(size_t)channel];
+ // TC Integrated Preamp-style gain/impedance-shaping approximation.
+ // Separate pre/post state prevents stale filter memory on position changes.
+ auto& hp=pre?st.boostPreHp:st.boostPostHp;
+ auto& lp=pre?st.boostPreLp:st.boostPostLp;
+ const float coupled=hp.hp(x,28.f,rate);
+ const float shaped=lp.lp(coupled,16000.f,rate);
+ const float g=gain(boostDb);
+ const float driven=shaped*g;
+ // Mild amplifier saturation, normalized to preserve boost below the rails.
+ const float rail=9.f;
+ return rail*std::tanh(driven/rail);
 }
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
  auto& s=states[(size_t)channel];
@@ -198,6 +214,8 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
  const float in=gain(v("input")),level=v("level"),drive=v("drive")*.01f,tone=v("tone")*.01f,mix=v("mix")*.01f;
  const float amount=v("modAmount")*.01f,modTone=v("modTone")*.01f,modBass=v("modBass")*.01f;
  const float xfDrive=gain(v("transformerDrive")),ih=v("inputHP"),il=v("inputLP"),oh=v("outputHP"),ol=v("outputLP");
+ const int boostPosition=juce::jlimit(0,2,(int)v("tcBoostPosition"));
+ const float boostDb=v("tcBoostGain");
  const int model=juce::jlimit(0,3,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
  for(int c=channels;c<2;++c)scratch.clear(c,0,count);
  for(int c=0;c<channels;++c){const float* src=buffer.getReadPointer(c);float* dst=scratch.getWritePointer(c);for(int i=0;i<count;++i)dst[i]=src[i]*in;}
@@ -210,7 +228,9 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
   for(size_t i=0;i<up.getNumSamples();++i){
    float x=s.inputHp.hp(samples[i],ih,rate);
    x=s.inputLp.lp(x,il,rate);
+   if(boostPosition==1)x=tcBoost(x,c,boostDb,rate,true);
    x=pedal(x,c,drive,tone,level,model,mod,amount,modTone,modBass,rate);
+   if(boostPosition==2)x=tcBoost(x,c,boostDb,rate,false);
    x=transformer(x,c,xfDrive,.5f,rate);
    x=s.outputHp.hp(x,oh,rate);
    samples[i]=s.outputLp.lp(x,ol,rate);
