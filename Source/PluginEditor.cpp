@@ -8,7 +8,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
  const juce::StringArray opts[]={
  {"RAT","Big Muff","Tube Screamer","Boss SD-1"},
  {"Triangle","Ram's Head"},
- {"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes","Schottky (optional)"},
+ {"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair"},
  {"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},
  {"1x","2x","4x","8x"}};
  for(int i=0;i<4;++i){auto& m=mods[(size_t)i];m.setButtonText("MOD "+juce::String(i+1));addAndMakeVisible(m);modAttachments[(size_t)i]=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"mod"+juce::String(i+1),m);}
