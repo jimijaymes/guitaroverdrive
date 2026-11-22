@@ -13,6 +13,17 @@ float diode(float x,float positive,float negative){
  const float clipped=v+knee*std::tanh((mag-v)/juce::jmax(.0001f,knee));
  return std::copysign(clipped,x);
 }
+// A smooth, voltage-dependent conduction branch for vintage silicon pairs.
+// The threshold and slope depend on effective diode series resistance and
+// surrounding transistor-stage loading; not a measured device SPICE model.
+float vintageSilicon(float x,float threshold,float softness){
+ const float mag=std::abs(x);
+ const float onset=threshold-softness;
+ if(mag<=onset)return x;
+ const float excess=mag-onset;
+ const float limited=onset+softness*std::log1p(excess/softness);
+ return std::copysign(limited,x);
+}
 float clip(float x,int type){
  switch(type){
  case 1:return diode(x,1.7f,1.7f); // LED
@@ -20,6 +31,7 @@ float clip(float x,int type){
  case 3:return diode(x,.65f,1.3f); // asymmetric
  case 4:return diode(x,1.05f,1.05f); // MOSFET-inspired threshold
  case 5:return x;
+ case 6:return diode(x,.36f,.36f); // optional Schottky-like low-Vf
  default:return diode(x,.65f,.65f);
  }
 }
@@ -39,7 +51,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
- p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes","Schottky (optional)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"oversampling",1},"Oversampling",juce::StringArray{"1x","2x","4x","8x"},2));
  return p;
@@ -84,7 +96,7 @@ float GuitarOverdriveProcessor::transformer(float x,int channel,float drive,floa
 }
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
  auto& s=states[(size_t)channel];
- const int clipping=juce::jlimit(0,5,(int)parameters.getRawParameterValue("clipping")->load());
+ const int clipping=juce::jlimit(0,6,(int)parameters.getRawParameterValue("clipping")->load());
  const bool m1=parameters.getRawParameterValue("mod1")->load()>.5f;
  const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
@@ -120,10 +132,10 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float booster=s.preTop.lp(pre,ram?9200.f:12500.f,rate)*(ram?1.75f:2.05f);
   const float a=s.muffOne.lp(booster,ram?4900.f:6700.f,rate)
       *(ram?2.8f+11.f*drive:3.2f+13.f*drive);
-  const float first=clipping==0?diode(a,ram?.69f:.62f,ram?.69f:.62f):clip(a,clipping);
+  const float first=clipping==0?vintageSilicon(a,ram?.68f:.64f,ram?.22f:.18f):clip(a,clipping);
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
-  const float second=clipping==0?diode(b,ram?.67f:.61f,ram?.67f:.61f):clip(b,clipping);
+  const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):clip(b,clipping);
   const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*modBass,rate);
   const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*modTone,rate);
   const float scoop=m2?(.15f+.85f*amount):(m4?.15f:1.f);
