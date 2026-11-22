@@ -30,8 +30,8 @@ float clip(float x,int type);
 // monotonic nonlinear transfer by bisection; bounded iterations and no state.
 float feedbackClip(float excitation,int type,float feedbackStrength){
  if(type==5)return excitation;
- float lo=juce::jmin(-1.f,excitation-8.f);
- float hi=juce::jmax(1.f,excitation+8.f);
+ float lo=juce::jmin(-1.f,excitation);
+ float hi=juce::jmax(1.f,excitation);
  for(int i=0;i<14;++i){
   const float mid=.5f*(lo+hi);
   const float residual=mid+feedbackStrength*(mid-clip(mid,type))-excitation;
