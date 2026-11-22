@@ -235,19 +235,46 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    b=feedbackClip(s.newGain2.lp(a,12500.f,rate)*(1.4f+5.f*drive),clipping==0?(modCircuit>0?3:0):clipping,2.8f);
    y=s.newTreble.lp(b,(modCircuit>0?850.f:1100.f)+12500.f*tone*(1.f+.4f*bright),rate);
    y=.14f*x+.86f*y;
-  }else if(model==7){ // DS-1: op-amp gain -> shunt diode pair -> passive tone
-   a=s.newGain2.lp(filtered*(3.f+58.f*drive*drive),9000.f,rate);
-   // D4/D5 hard clipping: Seeing Eye replaces D5 with a red LED;
-   // Ultra additionally adds a red LED in series with D4's silicon diode.
-   // A manual diode selection overrides the mod-specific automatic network.
+  }else if(model==7){ // DS-1: component-derived modern DS-1A signal path
+   // ElectroSmash DS-1 analysis: input 7.2 Hz, C2/R4 3.3 Hz,
+   // C3/R5 33 Hz, C5/R10 23 Hz; Q2 ~56x (35 dB);
+   // op-amp gain 1+VR1/4.7k (1..22.3), C8/R13 ~72 Hz,
+   // R14/C10 7.2 kHz small-signal, tone LP 234 / HP 1063 Hz.
+   // Filter loading, transistor I-V and op-amp dynamics are still approximated.
+   const float input=s.dsInput.hp(x,7.2f,rate);
+   const float coupled=s.dsCouple1.hp(input,3.3f,rate);
+   const float bassCut=s.dsCouple2.hp(coupled,33.f*(1.f-.40f*fat),rate);
+   // 9 V single-supply transistor Q2: asymmetric headroom and smooth knee.
+   // Keeley mods do not all change the Q2 gain; retain stock unless
+   // the selected component patch explicitly requires a change.
+   const float q2Gain=56.f;
+   const float q2Input=bassCut*q2Gain;
+   const float q2= q2Input>=0.f?4.0f*std::tanh(q2Input/4.0f)
+                               :3.0f*std::tanh(q2Input/3.0f);
+   const float opInput=s.dsCouple3.hp(q2,23.f,rate);
+   // Non-inverting stage: low frequencies pass with gain 1, high
+   // frequencies receive the gain-dependent feedback boost.
+   const float feedbackHigh=s.dsFeedbackHp.hp(opInput,72.f,rate);
+   const float opGain=1.f+21.2766f*drive;
+   const float opOut=s.dsOpLow.lp(opInput+(opGain-1.f)*feedbackHigh,
+                                18000.f,rate);
+   const float railLimited=juce::jlimit(-4.f,4.f,opOut);
+   // D4/D5 shunt-to-ground clipper, AFTER R14/C10; diode override
+   // replaces these devices rather than adding another clip stage.
+   // Seeing Eye: silicon + red LED. Ultra: Si+LED series / red LED.
+   const float diodeInput=s.dsClipLow.lp(railLimited,7200.f,rate);
    if(clipping==0 && modCircuit>0){
-    const float positive=modCircuit>=2?2.35f:.65f;
-    const float negative=1.7f;
-    b=diode(a,positive,negative);
-   }else b=clip(a,clipping);
-   const float low=s.newBass.lp(b,(modCircuit==3?195.f:(modCircuit>0?250.f:320.f))+350.f*bass,rate);
-   const float high=b-s.newTreble.lp(b,900.f+2200.f*treble,rate);
-   y=(1.f-tone)*low+tone*high;
+    const float pos=modCircuit>=2?2.35f:.65f;
+    b=diode(diodeInput,pos,1.7f);
+   }else b=clip(diodeInput,clipping);
+   // Passive Big Muff-style two-branch tone network: 234 Hz LP and
+   // 1063 Hz HP. Keep fixed corners; the pot blends their outputs.
+   const float low=s.dsToneLow.lp(b,234.f,rate);
+   const float high=s.dsToneHigh.hp(b,1063.f,rate);
+   const float passiveBlend=(1.f-tone)*low+tone*high;
+   // Approximate nominal 12 dB passive insertion loss.
+   y=.25f*passiveBlend;
+   y=s.dsOutput.hp(y,3.4f,rate);
   }else if(model==8){ // OD-2: normal and turbo use different gain distribution
    const float first=dual?2.8f+12.f*drive:1.5f+7.f*drive;
    a=feedbackClip(filtered*first,clipping==0?3:clipping,dual?4.2f:2.8f);
