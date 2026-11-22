@@ -67,15 +67,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("tcBoostGain","Preamp Boost dB",0,24,12);
  f("boostMidFreq","Preamp Mid Frequency Hz",180,7200,1100);
  f("boostMidGain","Preamp Mid Gain dB",-15,15,0);
+ f("pedalBass","New Pedal Bass %",0,100,50);f("pedalTreble","New Pedal Treble %",0,100,50);
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
  p.add(std::make_unique<B>(juce::ParameterID{"boostMidOn",1},"Preamp Mid EQ Enabled",false));
  p.add(std::make_unique<B>(juce::ParameterID{"pedalBypass",1},"Distortion Pedal Bypass",false));
  p.add(std::make_unique<C>(juce::ParameterID{"boostModel",1},"Boost Model",juce::StringArray{"TC Integrated Preamp","Boss FA-1"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"tcBoostPosition",1},"TC Preamp Boost",juce::StringArray{"Off","Pre Pedal","Post Pedal"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"dualMode",1},"OD-2 / SD-2 Mode",juce::StringArray{"Normal / Crunch","Turbo / Lead"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"feedbackCap",1},"TS9 / SD-1 HPF Capacitor",juce::StringArray{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
- p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD FX69 Grunge","DOD FX86 Death Metal","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
  p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
@@ -199,6 +201,63 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   if(m1)y=second;
   if(m3)y=.68f*y+.32f*std::tanh(second*1.5f);
   y*=.8f;
+ }else if(model>=4){
+  // First-pass family-specific circuit approximations. Stock voicings are
+  // defaults; four independent switches add circuit-inspired modification
+  // options, not claims of exact boutique component substitutions.
+  const bool dual=parameters.getRawParameterValue("dualMode")->load()>.5f;
+  const float bass=parameters.getRawParameterValue("pedalBass")->load()*.01f;
+  const float treble=parameters.getRawParameterValue("pedalTreble")->load()*.01f;
+  const float fat=m1?amount:0.f, bright=m2?modTone:0.f;
+  const float hpf[]={95.f,120.f,35.f,110.f,75.f,90.f,75.f};
+  const float lpf[]={12500.f,10500.f,17000.f,11500.f,13500.f,12500.f,15500.f};
+  const int idx=model-4;
+  const float pre=s.newInput.hp(x,hpf[idx]*(1.f-.65f*fat),rate);
+  const float filtered=s.newGain1.lp(pre,lpf[idx]*(1.f+.28f*bright),rate);
+  float a=0.f,b=0.f;
+  if(model==4){ // DOD FX69 Grunge: cascaded high gain, scooped active-like tone
+   a=feedbackClip(filtered*(3.f+29.f*drive),clipping==0?3:clipping,3.2f);
+   b=clip(s.newGain2.lp(a,8500.f,rate)*(2.5f+9.f*drive),clipping==0?0:clipping);
+   const float low=s.newBass.lp(b,220.f+350.f*bass,rate);
+   const float high=b-s.newTreble.lp(b,1200.f+4800.f*treble,rate);
+   y=.9f*low*(.3f+1.4f*bass)+high*(.2f+1.6f*treble);
+  }else if(model==5){ // DOD FX86 Death Metal: fixed heavy gain, two-band EQ
+   a=feedbackClip(filtered*(8.f+23.f*drive),clipping==0?3:clipping,5.f);
+   b=clip(s.newGain2.lp(a*(4.f+8.f*drive),7800.f,rate),clipping==0?0:clipping);
+   const float low=s.newBass.lp(b,180.f+420.f*bass,rate);
+   const float high=b-s.newTreble.lp(b,1800.f+3900.f*treble,rate);
+   y=low*(.25f+1.5f*bass)+high*(.2f+1.6f*treble);
+  }else if(model==6){ // BD-2: two cascaded nonlinear feedback gain sections
+   a=feedbackClip(filtered*(1.2f+10.f*drive),clipping==0?3:clipping,2.3f);
+   b=feedbackClip(s.newGain2.lp(a,12500.f,rate)*(1.4f+5.f*drive),clipping==0?3:clipping,2.8f);
+   y=s.newTreble.lp(b,1100.f+12500.f*tone*(1.f+.4f*bright),rate);
+   y=.14f*x+.86f*y;
+  }else if(model==7){ // DS-1: op-amp gain -> shunt diode pair -> passive tone
+   a=s.newGain2.lp(filtered*(3.f+58.f*drive*drive),9000.f,rate);
+   b=clip(a,clipping);
+   const float low=s.newBass.lp(b,320.f+350.f*bass,rate);
+   const float high=b-s.newTreble.lp(b,900.f+2200.f*treble,rate);
+   y=(1.f-tone)*low+tone*high;
+  }else if(model==8){ // OD-2: normal and turbo use different gain distribution
+   const float first=dual?2.8f+12.f*drive:1.5f+7.f*drive;
+   a=feedbackClip(filtered*first,clipping==0?3:clipping,dual?4.2f:2.8f);
+   b=dual?feedbackClip(s.newGain2.hp(a,140.f,rate)*(2.5f+8.f*drive),clipping==0?3:clipping,4.8f):a;
+   y=s.newTreble.lp(.17f*x+.83f*b,900.f+11000.f*tone,rate);
+  }else if(model==9){ // HM-2: high-gain stages plus resonant dual-band EQ
+   a=feedbackClip(filtered*(3.f+24.f*drive),clipping==0?3:clipping,4.5f);
+   b=clip(s.newGain2.lp(a*(2.5f+8.f*drive),6500.f,rate),clipping);
+   const float low=s.newBass.lp(b,110.f+240.f*bass,rate);
+   const float upper=b-s.newTreble.lp(b,700.f+1700.f*treble,rate);
+   const float presence=s.newPresence.lp(upper,2400.f,rate);
+   y=low*(.5f+1.7f*bass)+presence*(.25f+2.1f*treble)+.3f*upper;
+  }else{ // SD-2: crunch and lead use distinct gain and clipping stages
+   a=feedbackClip(filtered*(1.5f+(dual?14.f:8.f)*drive),clipping==0?3:clipping,dual?3.8f:2.7f);
+   b=dual?feedbackClip(s.newGain2.hp(a,190.f,rate)*(2.f+9.f*drive),clipping==0?3:clipping,4.6f):a;
+   y=s.newTreble.lp((dual?.10f:.22f)*x+(dual?.90f:.78f)*b,800.f+12500.f*tone,rate);
+  }
+  if(m3)y=.75f*y+.25f*std::tanh(y*(1.f+2.f*modBass));
+  if(m4)y=.82f*y+.18f*x; // optional clean blend
+  y*=.55f;
  }else{
   // Tube Screamer and SD-1: feedback-loop diode clipping, unlike RAT.
   // The input bass corner shapes which frequencies reach the feedback clipper.
@@ -239,7 +298,7 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
  const bool bypassPedal=v("pedalBypass")>.5f;
  const float boostMidHz=v("boostMidFreq"),boostMidDb=v("boostMidGain");
  const float boostDb=v("tcBoostGain");
- const int model=juce::jlimit(0,3,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
+ const int model=juce::jlimit(0,10,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
  for(int c=channels;c<2;++c)scratch.clear(c,0,count);
  for(int c=0;c<channels;++c){const float* src=buffer.getReadPointer(c);float* dst=scratch.getWritePointer(c);for(int i=0;i<count;++i)dst[i]=src[i]*in;}
  auto& os=*oversamplers[(size_t)osIndex];
