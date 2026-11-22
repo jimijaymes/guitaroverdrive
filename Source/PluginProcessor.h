@@ -30,7 +30,7 @@ private:
  struct State {
   OnePole inputHp,inputLp,outputHp,outputLp,preBass,preMid,preTop,feedback,ratTone,ratSlew;
   OnePole muffOne,muffTwo,muffToneLow,muffToneHigh,tsTone,tsPre,sdPre;
-  OnePole xfLow,xfHigh,xfLeak;
+  OnePole xfLow,xfHigh,xfLeak,boostPreHp,boostPreLp,boostPostHp,boostPostLp;
   float flux=0,opamp=0,stage1=0,stage2=0;
  };
  std::array<State,2> states{};
@@ -40,6 +40,7 @@ private:
  int maxBlock=512,fixedLatency=0,delaySize=0,write=0;
  std::array<std::vector<float>,2> dryDelay,wetDelay;
  float transformer(float,int,float,float,float);
+ float tcBoost(float,int,float,float,bool);
  float pedal(float,int,float,float,float,int,int,float,float,float,float);
  void processChunk(juce::AudioBuffer<float>&,int,int,int);
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GuitarOverdriveProcessor)
