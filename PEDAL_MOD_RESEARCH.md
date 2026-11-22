@@ -64,7 +64,7 @@ Research begun 2026-11-22. **Research only:** these are not yet DSP implementati
 | Medium | MXR Dyna Comp | Ross conversion, attack/release and blend mods | OTA compressor and envelope detector, not generic clipping | Verify mod attribution |
 | Medium | MXR Blue Box | Octave tracking, output/blend and gating mods | Rectification/divide-down suboctave and fuzz | Verify revisions |
 | Medium | DOD FX52 Classic Fuzz | Diode/gain and bias mods | Fuzz-specific transistor clipping and filtering | Documented mod source pending |
-| Medium | DOD FX56 American Metal / FX69 Grunge | Clipping and tone-network mods | Distinct distortion architecture, avoid generic diode-only presets | Documented mod source pending |
+| Medium | DOD FX86 Death Metal / FX69 Grunge | Clipping and tone-network mods | Distinct distortion architecture, avoid generic diode-only presets | Documented mod source pending |
 
 ### Modelling implementation order
 1. DS-1 with its own clipping/tone network and Keeley/Monte Allums-inspired options once exact changes are verified.
@@ -82,7 +82,7 @@ These are **approved development targets, not yet implemented DSP**. Keep RAT, B
 | Model | Required architecture / behaviour | Variants / mod research | Acceptance criteria |
 |---|---|---|---|
 | DOD FX69 Grunge | Original distortion stages, gain and distinctive dual-band LOUD/BUTT/FACE-style control behavior (verify exact revision and control labels) | FX69 vs FX69B revisions, documented component/diode modifications | Level-match stock, independently tune low and high shaping, verify clipping location |
-| DOD FX56 American Metal ("DOD Heavy Metal") | Distinct high-gain clipping and active/passive tone network per verified FX56 schematic | Revision history and documented mods | Do not conflate with Boss HM-2 or DOD FX69 |
+| DOD FX86 Death Metal | Distinct high-gain clipping and active/passive tone network per verified FX86 schematic | Revision history and documented mods | Do not conflate with Boss HM-2, DOD FX69, or FX56 American Metal |
 | Boss BD-2 Blues Driver | Cascaded gain with nonlinear response and interactive frequency shaping; model its dynamic behavior | Keeley Phat, Monte Allums Blues Stack/H2O where component changes are documented | Low-drive touch response, guitar-volume cleanup and bass switch behavior |
 | Boss DS-1 Distortion | Distortion amplifier, diode-to-ground clipping and dedicated tone network | Keeley Seeing Eye/Ultra, Monte Allums Rectifier Tri-Gain; verify pre/post-1994 differences | Independent diode network and correct tone-stack transfer |
 | Boss OD-2 Turbo OverDrive | Distinct Normal and Turbo circuit paths with separate gain/headroom/voicing | OD-2 vs OD-2R revision, documented modifications | Turbo is not just a gain multiplier |
@@ -90,10 +90,10 @@ These are **approved development targets, not yet implemented DSP**. Keep RAT, B
 | Boss SD-2 Dual OverDrive | Independent Crunch and Lead circuit models with switchable mode | SD-2 mode switching, documented modifications | Crunch and Lead have genuinely different nonlinear architecture |
 
 ### Integration plan
-- Expand the pedal choice by **appending** seven entries to preserve existing saved indices: DOD Grunge, DOD Heavy Metal (FX56), Boss BD-2, Boss DS-1, Boss OD-2, Boss HM-2, Boss SD-2.
+- Expand the pedal choice by **appending** seven entries to preserve existing saved indices: DOD Grunge, DOD Death Metal (FX86), Boss BD-2, Boss DS-1, Boss OD-2, Boss HM-2, Boss SD-2.
 - Add a model-specific mode selector for OD-2 Normal/Turbo and SD-2 Crunch/Lead. Only show/enable relevant controls.
 - Existing pedal-specific mods must not leak into other models. Add new mod controls after validating schematic-level changes.
 - Keep global input/output HP/LP, transformer, oversampling, dry/wet mix, and TC/FA-1 pre/post boost available for every model, including distortion bypass.
 - Research schematics, revision differences, clipping topology, RC filtering, tone stack and output level before writing DSP. Benchmark at several drive/tone settings and verify builds.
 
-**Naming note:** DOD Heavy Metal is taken to mean the **FX56 American Metal** in the absence of a specific model number; confirm before implementing if another DOD model was intended.
+**Correction:** The requested pedal is **DOD FX86 Death Metal**, not FX56 American Metal. Verify FX86 and FX86B revisions and their distinctive gain and EQ architecture before DSP implementation.
