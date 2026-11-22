@@ -25,7 +25,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,90,20);
   k.slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
   addAndMakeVisible(k.slider);k.label.setText(labels[i],juce::dontSendNotification);
-  k.label.setJustificationType(juce::Justification::centred);k.label.setColour(juce::Label::textColourId,text);
+  k.label.setJustificationType(juce::Justification::centred);k.label.setMinimumHorizontalScale(0.68f);k.label.setColour(juce::Label::textColourId,text);
   addAndMakeVisible(k.label);
   k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,ids[i],k.slider);
  }
