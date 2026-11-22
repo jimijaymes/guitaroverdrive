@@ -36,6 +36,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("transformerDrive","Transformer Drive dB",-24,24,0);
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
+ p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
  p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes"},0));
@@ -111,19 +112,25 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
  }else if(model==1){
   // Big Muff: two cascaded transistor gain/diode clipping stages, then
   // a passive bass/treble blend with a characteristic mid scoop.
+  // Triangle and Ram's Head both used silicon diode pairs. Component
+  // substitutions occurred across production; values here are approximations.
+  const bool ram=parameters.getRawParameterValue("muffVersion")->load()>.5f;
   const float bassBoost=m3?modBass:0.f;
-  const float pre=s.preBass.hp(x,45.f-25.f*bassBoost,rate);
-  const float a=s.muffOne.lp(pre,6200.f,rate)*(2.5f+12.f*drive);
-  const float first=clip(a,clipping==0?0:clipping);
-  const float b=s.muffTwo.lp(first,4800.f,rate)*(2.f+8.f*drive);
-  const float second=clip(b,clipping==0?0:clipping);
-  const float low=s.muffToneLow.lp(second,420.f+280.f*modBass,rate);
-  const float high=second-s.muffToneHigh.lp(second,900.f+900.f*modTone,rate);
+  const float pre=s.preBass.hp(x,(ram?57.f:38.f)-20.f*bassBoost,rate);
+  const float booster=s.preTop.lp(pre,ram?9200.f:12500.f,rate)*(ram?1.75f:2.05f);
+  const float a=s.muffOne.lp(booster,ram?4900.f:6700.f,rate)
+      *(ram?2.8f+11.f*drive:3.2f+13.f*drive);
+  const float first=clipping==0?diode(a,ram?.69f:.62f,ram?.69f:.62f):clip(a,clipping);
+  const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
+      *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
+  const float second=clipping==0?diode(b,ram?.67f:.61f,ram?.67f:.61f):clip(b,clipping);
+  const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*modBass,rate);
+  const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*modTone,rate);
   const float scoop=m2?(.15f+.85f*amount):(m4?.15f:1.f);
   const float scooped=low*(1.f-tone)+high*tone;
   const float flat=.55f*second+.45f*scooped;
   y=scoop*scooped+(1.f-scoop)*flat;
-  if(m1)y=second; // tone-stack bypass
+  if(m1)y=second;
   if(m3)y=.68f*y+.32f*std::tanh(second*1.5f);
   y*=.8f;
  }else{
