@@ -62,6 +62,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  juce::AudioProcessorValueTreeState::ParameterLayout p;
  auto f=[&](const char* id,const char* label,float lo,float hi,float def){p.add(std::make_unique<F>(juce::ParameterID{id,1},label,juce::NormalisableRange<float>(lo,hi,.1f),def));};
  f("input","Input dB",-24,24,0);f("drive","Drive %",0,100,50);f("tone","Tone %",0,100,50);f("level","Level dB",-36,18,0);f("mix","Mix %",0,100,100);
+ for(int i=1;i<=4;++i){const auto id="modControl"+juce::String(i);p.add(std::make_unique<F>(juce::ParameterID{id,1},"Mod "+juce::String(i)+" Control",juce::NormalisableRange<float>(0.f,100.f,.1f),50.f));}
  f("modAmount","Mod Amount %",0,100,50);f("modTone","Mod Tone %",0,100,50);f("modBass","Mod Bass %",0,100,50);
  f("transformerDrive","Transformer Drive dB",-24,24,0);
  f("tcBoostGain","Preamp Boost dB",0,24,12);
@@ -159,11 +160,13 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
  const bool m4=parameters.getRawParameterValue("mod4")->load()>.5f;
  const int modCircuit=juce::jlimit(0,3,(int)parameters.getRawParameterValue("modCircuit")->load());
+ const auto modValue=[this](int i){return parameters.getRawParameterValue("modControl"+juce::String(i))->load()*.01f;};
+ const float a1=modValue(1),a2=modValue(2),a3=modValue(3),a4=modValue(4);
  float y=x;
  if(model==0){
   // RAT: frequency-selective high-gain op-amp followed by hard diodes to ground.
-  const float ruetz=m1?amount:0.f;
-  const float fat=m3?amount:0.f;
+  const float ruetz=m1?a1:0.f;
+  const float fat=m3?a3:0.f;
   // RAT gain network has two independent feedback high-pass branches:
   // 47R/2.2uF ~1.54 kHz and 560R/4.7uF ~60.5 Hz. Ruetz changes
   // the 47R leg; the 560R leg remains in circuit.
@@ -181,7 +184,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // RAT Filter rotates clockwise towards darker sound.
   const float cutoff=350.f*std::pow(50.f,1.f-tone);
   y=s.ratTone.lp(y,cutoff,rate);
-  if(m4)y=(1.f-.5f*amount)*y+.5f*amount*x;
+  if(m4)y=(1.f-.5f*a4)*y+.5f*a4*x;
   y*=.60f;
  }else if(model==1){
   // Big Muff: two cascaded transistor gain/diode clipping stages, then
@@ -189,7 +192,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Triangle and Ram's Head both used silicon diode pairs. Component
   // substitutions occurred across production; values here are approximations.
   const bool ram=parameters.getRawParameterValue("muffVersion")->load()>.5f;
-  const float bassBoost=m3?modBass:0.f;
+  const float bassBoost=m3?a3:0.f;
   const float pre=s.preBass.hp(x,(ram?57.f:38.f)-20.f*bassBoost,rate);
   const float booster=s.preTop.lp(pre,ram?9200.f:12500.f,rate)*(ram?1.75f:2.05f);
   const float a=s.muffOne.lp(booster,ram?4900.f:6700.f,rate)
@@ -198,9 +201,9 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
   const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):feedbackClip(b,clipping,ram?3.8f:3.2f);
-  const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*modBass,rate);
-  const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*modTone,rate);
-  const float scoop=m2?(.15f+.85f*amount):(m4?.15f:1.f);
+  const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*a3,rate);
+  const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*a4,rate);
+  const float scoop=m2?(.15f+.85f*a2):(m4?.15f:1.f);
   const float scooped=low*(1.f-tone)+high*tone;
   const float flat=.55f*second+.45f*scooped;
   y=scoop*scooped+(1.f-scoop)*flat;
@@ -214,7 +217,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const bool dual=parameters.getRawParameterValue("dualMode")->load()>.5f;
   const float bass=parameters.getRawParameterValue("pedalBass")->load()*.01f;
   const float treble=parameters.getRawParameterValue("pedalTreble")->load()*.01f;
-  const float fat=m1?amount:0.f, bright=m2?modTone:0.f;
+  const float fat=m1?a1:0.f, bright=m2?modTone:0.f;
   const float hpf[]={95.f,120.f,35.f,110.f,75.f,90.f,75.f};
   const float lpf[]={12500.f,10500.f,17000.f,11500.f,13500.f,12500.f,15500.f};
   const int idx=model-4;
@@ -319,7 +322,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    b=dual?feedbackClip(s.newGain2.hp(a,190.f,rate)*(2.f+9.f*drive),clipping==0?3:clipping,4.6f):a;
    y=s.newTreble.lp((dual?.10f:.22f)*x+(dual?.90f:.78f)*b,800.f+12500.f*tone,rate);
   }
-  if(m3)y=.75f*y+.25f*std::tanh(y*(1.f+2.f*modBass));
+  if(m3)y=.75f*y+.25f*std::tanh(y*(1.f+2.f*a3));
   if(m4)y=.82f*y+.18f*x; // optional clean blend
   y*=.55f;
  }else{
@@ -329,9 +332,9 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const int cap=juce::jlimit(0,2,(int)parameters.getRawParameterValue("feedbackCap")->load());
   const float capRatio=cap==1?1.5f:(cap==2?.68f:1.f);
   float bassCorner=720.f/capRatio;
-  if(m1 && !sd)bassCorner=(720.f-490.f*amount)/capRatio; // TS bass+
-  if(m2 && sd)bassCorner=(720.f-480.f*amount)/capRatio; // SD-1 bass
-  if(m3)bassCorner=juce::jmin(bassCorner,(720.f-350.f*modBass)/capRatio);
+  if(m1 && !sd)bassCorner=(720.f-490.f*a1)/capRatio; // TS bass+
+  if(m2 && sd)bassCorner=(720.f-480.f*a2)/capRatio; // SD-1 bass
+  if(m3)bassCorner=juce::jmin(bassCorner,(720.f-350.f*a3)/capRatio);
   const float filtered=(sd?s.sdPre:s.tsPre).hp(x,bassCorner,rate);
   const float amplified=filtered*(1.5f+18.f*drive*drive);
   // Stock SD-1 has asymmetrical clipping, stock TS symmetric.
@@ -344,9 +347,9 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
-  const float cutoff=850.f*std::pow(12.f,tone)*(m4?(1.f+.5f*modTone):1.f);
+  const float cutoff=850.f*std::pow(12.f,tone)*(m4?(1.f+.5f*a4):1.f);
   y=s.tsTone.lp(y,cutoff,rate);
-  if(m1&&sd)y=s.preMid.lp(y,8500.f-3500.f*amount,rate); // C6 mod
+  if(m1&&sd)y=s.preMid.lp(y,8500.f-3500.f*a1,rate); // C6 mod
   y*=1.25f;
  }
  return y*gain(level);
