@@ -66,6 +66,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("transformerDrive","Transformer Drive dB",-24,24,0);
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
+ p.add(std::make_unique<C>(juce::ParameterID{"feedbackCap",1},"TS9 / SD-1 HPF Capacitor",juce::StringArray{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
@@ -167,10 +168,12 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Tube Screamer and SD-1: feedback-loop diode clipping, unlike RAT.
   // The input bass corner shapes which frequencies reach the feedback clipper.
   const bool sd=model==3;
-  float bassCorner=sd?720.f:720.f;
-  if(m1 && !sd)bassCorner=720.f-490.f*amount; // TS bass+
-  if(m2 && sd)bassCorner=720.f-480.f*amount; // SD-1 bass
-  if(m3)bassCorner=juce::jmin(bassCorner,720.f-350.f*modBass);
+  const int cap=juce::jlimit(0,2,(int)parameters.getRawParameterValue("feedbackCap")->load());
+  const float capRatio=cap==1?1.5f:(cap==2?.68f:1.f);
+  float bassCorner=720.f/capRatio;
+  if(m1 && !sd)bassCorner=(720.f-490.f*amount)/capRatio; // TS bass+
+  if(m2 && sd)bassCorner=(720.f-480.f*amount)/capRatio; // SD-1 bass
+  if(m3)bassCorner=juce::jmin(bassCorner,(720.f-350.f*modBass)/capRatio);
   const float filtered=(sd?s.sdPre:s.tsPre).hp(x,bassCorner,rate);
   const float amplified=filtered*(1.5f+18.f*drive*drive);
   // Stock SD-1 has asymmetrical clipping, stock TS symmetric.
