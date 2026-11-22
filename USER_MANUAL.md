@@ -40,3 +40,6 @@ Saturator is the reference implementation for reusable transformer algorithms. W
 
 ## Stacking implementation note
 The four switches are independent APVTS boolean parameters, and the diode selection is always separate. RAT Mod 2 is reserved and currently has no DSP effect; it must not be advertised as an active modification until a distinct non-clipping circuit change is implemented. Clipping alternatives cannot be stacked with each other as a single diode network; choose one configuration per pedal. The current UI changes have not yet been validated in a host.
+
+## Early Big Muff variants
+The Big Muff Version selector offers Triangle and Ram's Head. Both used silicon diode pairs in transistor clipping stages; neither is intrinsically a germanium model. The Stock clipping setting uses different nominal silicon conduction and stage loading approximations; global diode selection overrides both clipping stages. Triangle and Ram's Head have separately tuned booster gain, interstage gain, coupling bass corner, high-frequency rolloff and tone-stack crossover. Actual units vary considerably by production revision, and these are initial approximations, not verified schematic-specific netlists. Independent tone mods and diode selection remain stackable.
