@@ -27,3 +27,50 @@ Research begun 2026-11-22. **Research only:** these are not yet DSP implementati
 4. Avoid breaking preset parameter IDs; distinguish stock, research, implemented and validated states.
 5. Require CI pass and DAW/audio checks before describing anything as production-ready.
 6. Aion FX is primarily a schematic/project-documentation reference, not automatically the originator of every historical modification. Wampler, Keeley, Analog Man and Monte Allums modifications should be attributed accurately.
+
+## Expansion phase — Boss, Electro-Harmonix, MXR and DOD (research only)
+
+**Scope:** add distinct circuit families only where their signal flow justifies a new model. Existing RAT/Muff/TS/SD-1 models and mods remain unchanged. Prioritize gain/fuzz/boost first; compressors, EQs and modulation need dedicated DSP and should not be misrepresented as diode mods.
+
+### Boss
+| Priority | Model | Named modification / variants to research | DSP requirements | Source / confidence |
+|---|---|---|---|---|
+| High | DS-1 | Keeley Seeing Eye / Ultra; Monte Allums Rectifier Tri-Gain | Distortion op-amp gain, shunt clipping and tone-stack; diode combinations, low-end RC changes | Monte Allums documented catalogue: https://monteallums.com/wordpress/product/pedal-mod-pdf-instructions-list-1/ ; Keeley exact revisions need verification |
+| High | BD-2 | Keeley Phat; Monte Allums Blues Stack, BD-H2O | Cascaded gain, dynamic clipping and bass response; Phat switching | https://monteallums.com/wordpress/product/pedal-mod-pdf-instructions-list-1/ ; proprietary circuit details require verification |
+| High | MT-2 | Monte Allums Sustainia / Tri-Gain; stock MT-2 | Multiple clipping/gain stages and complex active mid EQ; optional germanium and flatter EQ | https://monteallums.com/wordpress/product/mt-2-sustainia-mod/ |
+| High | HM-2 | Monte Allums Vintage Plus; stock HM-2 | Distortion + distinctive dual-peak EQ, independent from MT-2 | https://monteallums.com/wordpress/product/pedal-mod-pdf-instructions-list-1/ |
+| Medium | OD-3 | Monte Allums mods and stock circuit | Separate overdrive topology, dynamic response and tone control | https://monteallums.com/Pedal_Settings.html |
+| Medium | DS-2 | Turbo mode variations and documented boutique mods | Distinct mode-dependent gain/EQ networks; validate actual mod documentation | research pending |
+| Medium | CS-3 | Monte Allums Opto Plus / Ultra Plus / Noise Decimator | Compression envelope/attack, noise floor and bass switching; **not a distortion mode** | https://www.monteallums.com/pedal_mods_CS3.html |
+| Medium | GE-7 | Monte Allums low-noise Plus / vintage revisions | Seven graphic EQ bands, op-amp noise and headroom; model 3- vs 4-op-amp revision only with verification | https://monteallums.com/wordpress/product/boss-ge-7-vintage-ge-7-geb-7-mod-kits-regular-kits/ |
+
+### Electro-Harmonix
+| Priority | Model | Historically significant variants/mods to investigate | DSP requirements | Research status |
+|---|---|---|---|---|
+| High | Big Muff Pi | Green Russian, Civil War, Black Russian, NYC, Triangle, Ram's Head, Op-Amp; tone-bypass and mids mods | Separate transistor/op-amp architecture, RC/gain, clipping stages and passive tone stack | Product families established; verify revision-by-revision component maps |
+| High | Hot Tubes | Vintage CMOS and reissue differences, documented bass/gain mods | CMOS transfer characteristic, frequency-selective drive | Exact boutique mods unverified |
+| High | Double Muff | Dual Muff Fuzz cascade and bypass/stack options | Two cascaded clipping circuits, gain staging | Verify circuit variants |
+| Medium | LPB-1 | Vintage/reissue transistor boost and documented bass/treble coupling mods | Single-transistor boost, bias/loading and frequency response | Verify component values |
+| Medium | Soul Food | Klon-family circuit; diode and bass modifications | Separate clean/mid-gain paths and mixing | Verify mod provenance |
+| Medium | Small Clone / Electric Mistress | Depth/vibrato or clock/noise modifications | BBD chorus/flanger, modulation and anti-alias filtering; separate future plugin family | Do not force into overdrive engine |
+| Medium | Memory Man | Headroom, clock, preamp and modulation modifications | BBD delay + nonlinear preamp; separate future plugin family | Verify revision and modification documentation |
+
+### MXR / DOD
+| Priority | Model | Mods / variant research | DSP requirements | Research status |
+|---|---|---|---|---|
+| High | MXR Distortion+ | Germanium vs silicon/LED clipping, gain-capacitor and bass response mods | Op-amp with shunt diodes, no RAT-style filter topology | Historical family clear; boutique attribution needs sourcing |
+| High | DOD Overdrive Preamp 250 | Grey/yellow revision, clipping diode and bass-cap mods; boutique 250 variants | Op-amp gain and shunt clipping with revision-dependent filtering | Verify component values and revision history |
+| High | MXR Micro Amp | Gain range, output response, optional tone/bass mods | Clean gain, frequency response, op-amp rail/headroom | Verify actual mods |
+| Medium | MXR Dyna Comp | Ross conversion, attack/release and blend mods | OTA compressor and envelope detector, not generic clipping | Verify mod attribution |
+| Medium | MXR Blue Box | Octave tracking, output/blend and gating mods | Rectification/divide-down suboctave and fuzz | Verify revisions |
+| Medium | DOD FX52 Classic Fuzz | Diode/gain and bias mods | Fuzz-specific transistor clipping and filtering | Documented mod source pending |
+| Medium | DOD FX56 American Metal / FX69 Grunge | Clipping and tone-network mods | Distinct distortion architecture, avoid generic diode-only presets | Documented mod source pending |
+
+### Modelling implementation order
+1. DS-1 with its own clipping/tone network and Keeley/Monte Allums-inspired options once exact changes are verified.
+2. BD-2 and MT-2 (distinct topologies), then HM-2.
+3. Big Muff additional verified vintage revisions and separate Op-Amp Muff.
+4. MXR Distortion+ and DOD 250, then LPB-1 and Micro Amp.
+5. Compressors/EQ and modulation/delay only as separate DSP modules or plugins.
+
+**Verification gate:** a product listing or anecdote establishes that a named mod exists, not its precise schematic. Do not label an approximate implementation as an exact Keeley, Wampler, Analog Man, Monte Allums or Aion FX circuit without schematic or measurement evidence.
