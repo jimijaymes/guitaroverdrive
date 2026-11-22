@@ -12,6 +12,10 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
  {"1x","2x","4x","8x"}};
  for(int i=0;i<4;++i){auto& m=mods[(size_t)i];m.setButtonText("MOD "+juce::String(i+1));addAndMakeVisible(m);modAttachments[(size_t)i]=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"mod"+juce::String(i+1),m);}
  for(size_t i=0;i<choices.size();++i){auto& c=choices[i];c.label.setText(names[i],juce::dontSendNotification);addAndMakeVisible(c.label);for(int j=0;j<opts[i].size();++j)c.box.addItem(opts[i][j],j+1);addAndMakeVisible(c.box);c.attach=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.parameters,cids[i],c.box);}
+ choices[0].box.onChange=[this]{const int pedal=choices[0].box.getSelectedItemIndex();
+  const char* names[4][4]={{"RUETZ","GAIN EQ / FILTER","FAT","CLEAN BLEND"},{"TONE BYPASS","MID CONTROL","CREAMY / BASS","FLAT MIDS"},{"BASS+","808 VOICING","EXTENDED BASS","BRIGHT TONE"},{"C6 FILTER","BASS MOD","EXTENDED BASS","BRIGHT TONE"}};
+  for(int i=0;i<4;++i)mods[(size_t)i].setButtonText(names[juce::jlimit(0,3,pedal)][i]);};
+ choices[0].box.onChange();
  setSize(1060,760);
 }
 void GuitarOverdriveEditor::paint(juce::Graphics& g){
