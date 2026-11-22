@@ -82,3 +82,16 @@ Reference documentation:
 - https://www.synfo.nl/servicemanuals/Boss/BOSS_SD-2_SERVICE_NOTES.pdf
 
 **Important:** these algorithms remain approximations, not measured hardware-accurate clones. This change has not been DAW auditioned or calibrated against original pedals.
+
+## HM-2 resonant EQ revision
+The previous HM-2 shelf-like bass/presence EQ has been replaced with **three independent state-variable resonant filter branches** approximating the original gyrator networks. The stock frequency centres are 86.8 Hz (Low), 958.5 Hz and 1278.6 Hz (both controlled by High). The latter two bands intentionally overlap; there is no separate mid knob in the stock pedal. At 50% the controls are nominally flat; both knobs can boost or cut. The dedicated **Pedal Bass** and **Pedal Treble** controls drive this network; the shared Tone knob does not control the HM-2 resonances.
+
+HM-2 Circuit Mod C, Low-tuned EQ, now selects the documented Dunwich/Heard Sound Circuits lower-tuned frequency centres: 62.48, 716.67 and 1065.5 Hz. Circuit Mod A/B remain development placeholders and do not change the new EQ. They should not be presented as finished mods.
+
+**Accuracy:** This is a three-band digital approximation of the frequency peaks, *not* a full component-level gyrator/op-amp simulation. Q, interaction, pot taper, boost/cut depth, loading and diode distortion remain to be measured and matched to hardware; current bandwidth and gain values are estimates.
+
+Research:
+- https://davidrossmusicalinstruments.com/boss-hm-2-circuit-analysis/
+- https://bench.swellamps.com/filters/pedal-hm2/
+- https://aionfx.com/app/files/docs/graviton_documentation.pdf
+- https://dirtboxlayouts.blogspot.com/2021/05/dunwich-amplification-diy-hm2-2021.html
