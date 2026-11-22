@@ -9,8 +9,10 @@ private:
  GuitarOverdriveProcessor& processor;
  struct Knob {juce::Slider slider;juce::Label label;std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attach;};
  struct Choice {juce::ComboBox box;juce::Label label;std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> attach;};
- std::array<Knob,14> knobs;
- std::array<Choice,7> choices;
+ std::array<Knob,16> knobs;
+ std::array<Choice,8> choices;
+ juce::ToggleButton pedalBypass,boostMidOn;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> pedalBypassAttachment,boostMidAttachment;
  std::array<juce::ToggleButton,4> mods;
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>,4> modAttachments;
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GuitarOverdriveEditor)
