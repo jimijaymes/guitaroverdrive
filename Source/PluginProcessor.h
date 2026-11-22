@@ -31,6 +31,7 @@ private:
   OnePole inputHp,inputLp,outputHp,outputLp,preBass,preMid,preTop,feedback,ratTone,ratSlew;
   OnePole muffOne,muffTwo,muffToneLow,muffToneHigh,tsTone,tsPre,sdPre;
   OnePole xfLow,xfHigh,xfLeak,boostPreHp,boostPreLp,boostPostHp,boostPostLp;
+  OnePole newInput,newGain1,newGain2,newBass,newTreble,newMid,newPresence,newOutput;
   float flux=0,opamp=0,stage1=0,stage2=0;
   float midPre1=0,midPre2=0,midPost1=0,midPost2=0;
  };
