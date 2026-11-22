@@ -3,8 +3,8 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
  const char* ids[]={"input","drive","tone","level","mix","modAmount","modTone","modBass","transformerDrive","inputHP","inputLP","outputHP","outputLP","tcBoostGain","boostMidFreq","boostMidGain","pedalBass","pedalTreble"};
  const char* labels[]={"INPUT dB","DISTORTION","TONE / FILTER","LEVEL dB","MIX %","MOD DEPTH","MOD TONE","MOD BASS","XFMR DRIVE dB","INPUT HP Hz","INPUT LP Hz","OUTPUT HP Hz","OUTPUT LP Hz","BOOST dB","MID FREQ Hz","MID GAIN dB","PEDAL BASS %","PEDAL TREBLE %"};
  for(size_t i=0;i<knobs.size();++i){auto& k=knobs[i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,90,20);addAndMakeVisible(k.slider);k.label.setText(labels[i],juce::dontSendNotification);k.label.setJustificationType(juce::Justification::centred);addAndMakeVisible(k.label);k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,ids[i],k.slider);}
- const char* cids[]={"pedal","muffVersion","feedbackCap","clipping","transformer","oversampling","tcBoostPosition","boostModel","dualMode"};
- const char* names[]={"PEDAL MODEL","BIG MUFF VERSION","TS9 / SD-1 HPF CAP","DIODE / CLIPPING","SATURATOR TRANSFORMER","OVERSAMPLING","BOOST ROUTING","BOOST CIRCUIT","OD-2 / SD-2 MODE"};
+ const char* cids[]={"pedal","muffVersion","feedbackCap","clipping","transformer","oversampling","tcBoostPosition","boostModel","dualMode","modCircuit"};
+ const char* names[]={"PEDAL MODEL","BIG MUFF VERSION","TS9 / SD-1 HPF CAP","DIODE / CLIPPING","SATURATOR TRANSFORMER","OVERSAMPLING","BOOST ROUTING","BOOST CIRCUIT","OD-2 / SD-2 MODE","CIRCUIT MOD"};
  const juce::StringArray opts[]={
  {"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD Grunge FX69","DOD Death Metal FX86","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},
  {"Triangle","Ram's Head"},
@@ -14,7 +14,8 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
  {"1x","2x","4x","8x"},
  {"Off","Pre Pedal","Post Pedal"},
  {"TC Integrated Preamp","Boss FA-1"},
- {"Normal / Crunch","Turbo / Lead"}};
+ {"Normal / Crunch","Turbo / Lead"},
+ {"Stock","Mod A","Mod B","Mod C"}};
  for(int i=0;i<4;++i){auto& m=mods[(size_t)i];m.setButtonText("MOD "+juce::String(i+1));addAndMakeVisible(m);modAttachments[(size_t)i]=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.parameters,"mod"+juce::String(i+1),m);}
  for(size_t i=0;i<choices.size();++i){auto& c=choices[i];c.label.setText(names[i],juce::dontSendNotification);addAndMakeVisible(c.label);for(int j=0;j<opts[i].size();++j)c.box.addItem(opts[i][j],j+1);addAndMakeVisible(c.box);c.attach=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.parameters,cids[i],c.box);}
  pedalBypass.setButtonText("BYPASS DISTORTION PEDAL");addAndMakeVisible(pedalBypass);
@@ -25,6 +26,10 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   choices[1].box.setEnabled(pedal==1);choices[1].label.setEnabled(pedal==1);
   choices[2].box.setEnabled(pedal==2||pedal==3);choices[2].label.setEnabled(pedal==2||pedal==3);
   choices[8].box.setEnabled(pedal==8||pedal==10);choices[8].label.setEnabled(pedal==8||pedal==10);
+  choices[9].box.setEnabled(pedal==6||pedal==7||pedal==9);choices[9].label.setEnabled(pedal==6||pedal==7||pedal==9);
+  choices[9].box.clear(juce::dontSendNotification);
+  const juce::StringArray modNames=pedal==7?juce::StringArray{"Stock","Keeley Seeing Eye","Keeley Ultra","Ultra + Seeing Eye"}:pedal==6?juce::StringArray{"Stock","Phat 68nF","Phat 82nF","Phat + diode"}:juce::StringArray{"Stock","Bass response","Presence response","Low-tuned EQ"};
+  for(int j=0;j<modNames.size();++j)choices[9].box.addItem(modNames[j],j+1);
   const char* names[11][4]={{"RUETZ","GAIN EQ / FILTER","FAT","CLEAN BLEND"},{"TONE BYPASS","MID CONTROL","CREAMY / BASS","FLAT MIDS"},{"BASS+","808 VOICING","EXTENDED BASS","BRIGHT TONE"},{"C6 FILTER","BASS MOD","EXTENDED BASS","BRIGHT TONE"},
   {"BASS COUPLING","PRESENCE","CLIP DENSITY","CLEAN BLEND"},
   {"BASS COUPLING","PRESENCE","CLIP DENSITY","CLEAN BLEND"},
@@ -35,7 +40,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   {"BASS MOD","PRESENCE","CLIP DENSITY","CLEAN BLEND"}};
   for(int i=0;i<4;++i)mods[(size_t)i].setButtonText(names[juce::jlimit(0,10,pedal)][i]);};
  choices[0].box.onChange();
- setSize(1060,1030);
+ setSize(1060,1110);
 }
 void GuitarOverdriveEditor::paint(juce::Graphics& g){
  g.fillAll(juce::Colour(0xff161c23));g.setColour(juce::Colour(0xfff3e4c5));g.setFont(juce::Font(juce::FontOptions(30,juce::Font::bold)));g.drawText("GUITAR OVERDRIVE",24,18,620,45,juce::Justification::centredLeft);
@@ -48,6 +53,7 @@ void GuitarOverdriveEditor::resized(){
  choices[6].label.setBounds(275,745,300,22);choices[6].box.setBounds(275,768,300,30);
  choices[7].label.setBounds(600,745,325,22);choices[7].box.setBounds(600,768,325,30);
  choices[8].label.setBounds(25,925,325,22);choices[8].box.setBounds(25,948,325,30);
+ choices[9].label.setBounds(25,1035,325,22);choices[9].box.setBounds(25,1058,325,30);
  pedalBypass.setBounds(25,835,235,28);boostMidOn.setBounds(275,835,155,28);
  for(int i=0;i<4;++i)mods[(size_t)i].setBounds(25+i*250,660,235,28);
  for(int i=0;i<5;++i){auto& k=knobs[(size_t)i];int x=25+i*207;k.slider.setBounds(x,245,175,80);k.label.setBounds(x,324,175,19);}
