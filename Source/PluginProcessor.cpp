@@ -32,6 +32,9 @@ float clip(float x,int type){
  case 4:return diode(x,1.05f,1.05f); // MOSFET-inspired threshold
  case 5:return x;
  case 6:return diode(x,.36f,.36f); // optional Schottky-like low-Vf
+ case 7:return diode(x,2.35f,2.35f); // symmetric Si+LED series string each polarity
+ case 8:return diode(x,.48f,.48f); // low-forward silicon alternative
+ case 9:return diode(x,.82f,.82f); // higher-forward silicon alternative
  default:return diode(x,.65f,.65f);
  }
 }
@@ -51,7 +54,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
- p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes","Schottky (optional)"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"oversampling",1},"Oversampling",juce::StringArray{"1x","2x","4x","8x"},2));
  return p;
@@ -96,7 +99,7 @@ float GuitarOverdriveProcessor::transformer(float x,int channel,float drive,floa
 }
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
  auto& s=states[(size_t)channel];
- const int clipping=juce::jlimit(0,6,(int)parameters.getRawParameterValue("clipping")->load());
+ const int clipping=juce::jlimit(0,9,(int)parameters.getRawParameterValue("clipping")->load());
  const bool m1=parameters.getRawParameterValue("mod1")->load()>.5f;
  const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
