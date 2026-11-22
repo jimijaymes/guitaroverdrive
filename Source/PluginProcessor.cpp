@@ -74,6 +74,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  p.add(std::make_unique<B>(juce::ParameterID{"pedalBypass",1},"Distortion Pedal Bypass",false));
  p.add(std::make_unique<C>(juce::ParameterID{"boostModel",1},"Boost Model",juce::StringArray{"TC Integrated Preamp","Boss FA-1"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"tcBoostPosition",1},"TC Preamp Boost",juce::StringArray{"Off","Pre Pedal","Post Pedal"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"modCircuit",1},"Verified Mod Circuit",juce::StringArray{"Stock","Mod A","Mod B","Mod C"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"dualMode",1},"OD-2 / SD-2 Mode",juce::StringArray{"Normal / Crunch","Turbo / Lead"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"feedbackCap",1},"TS9 / SD-1 HPF Capacitor",juce::StringArray{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
@@ -157,6 +158,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
  const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
  const bool m4=parameters.getRawParameterValue("mod4")->load()>.5f;
+ const int modCircuit=juce::jlimit(0,3,(int)parameters.getRawParameterValue("modCircuit")->load());
  float y=x;
  if(model==0){
   // RAT: frequency-selective high-gain op-amp followed by hard diodes to ground.
@@ -212,7 +214,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float hpf[]={95.f,120.f,35.f,110.f,75.f,90.f,75.f};
   const float lpf[]={12500.f,10500.f,17000.f,11500.f,13500.f,12500.f,15500.f};
   const int idx=model-4;
-  const float pre=s.newInput.hp(x,hpf[idx]*(1.f-.65f*fat),rate);
+  const float circuitBass=(model==7 && modCircuit>0)?0.70f:(model==6 && modCircuit>0?0.76f:1.f);
+  const float pre=s.newInput.hp(x,hpf[idx]*(1.f-.65f*fat)*circuitBass,rate);
   const float filtered=s.newGain1.lp(pre,lpf[idx]*(1.f+.28f*bright),rate);
   float a=0.f,b=0.f;
   if(model==4){ // DOD FX69 Grunge: cascaded high gain, scooped active-like tone
@@ -228,14 +231,21 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    const float high=b-s.newTreble.lp(b,1800.f+3900.f*treble,rate);
    y=low*(.25f+1.5f*bass)+high*(.2f+1.6f*treble);
   }else if(model==6){ // BD-2: two cascaded nonlinear feedback gain sections
-   a=feedbackClip(filtered*(1.2f+10.f*drive),clipping==0?3:clipping,2.3f);
-   b=feedbackClip(s.newGain2.lp(a,12500.f,rate)*(1.4f+5.f*drive),clipping==0?3:clipping,2.8f);
-   y=s.newTreble.lp(b,1100.f+12500.f*tone*(1.f+.4f*bright),rate);
+   a=feedbackClip(filtered*(1.2f+10.f*drive),clipping==0?(modCircuit>0?3:0):clipping,2.3f);
+   b=feedbackClip(s.newGain2.lp(a,12500.f,rate)*(1.4f+5.f*drive),clipping==0?(modCircuit>0?3:0):clipping,2.8f);
+   y=s.newTreble.lp(b,(modCircuit>0?850.f:1100.f)+12500.f*tone*(1.f+.4f*bright),rate);
    y=.14f*x+.86f*y;
   }else if(model==7){ // DS-1: op-amp gain -> shunt diode pair -> passive tone
    a=s.newGain2.lp(filtered*(3.f+58.f*drive*drive),9000.f,rate);
-   b=clip(a,clipping);
-   const float low=s.newBass.lp(b,320.f+350.f*bass,rate);
+   // D4/D5 hard clipping: Seeing Eye replaces D5 with a red LED;
+   // Ultra additionally adds a red LED in series with D4's silicon diode.
+   // A manual diode selection overrides the mod-specific automatic network.
+   if(clipping==0 && modCircuit>0){
+    const float positive=modCircuit>=2?2.35f:.65f;
+    const float negative=1.7f;
+    b=diode(a,positive,negative);
+   }else b=clip(a,clipping);
+   const float low=s.newBass.lp(b,(modCircuit>0?250.f:320.f)+350.f*bass,rate);
    const float high=b-s.newTreble.lp(b,900.f+2200.f*treble,rate);
    y=(1.f-tone)*low+tone*high;
   }else if(model==8){ // OD-2: normal and turbo use different gain distribution
@@ -246,9 +256,9 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   }else if(model==9){ // HM-2: high-gain stages plus resonant dual-band EQ
    a=feedbackClip(filtered*(3.f+24.f*drive),clipping==0?3:clipping,4.5f);
    b=clip(s.newGain2.lp(a*(2.5f+8.f*drive),6500.f,rate),clipping);
-   const float low=s.newBass.lp(b,110.f+240.f*bass,rate);
+   const float low=s.newBass.lp(b,(modCircuit==3?65.f:110.f)+240.f*bass,rate);
    const float upper=b-s.newTreble.lp(b,700.f+1700.f*treble,rate);
-   const float presence=s.newPresence.lp(upper,2400.f,rate);
+   const float presence=s.newPresence.lp(upper,modCircuit==3?1700.f:2400.f,rate);
    y=low*(.5f+1.7f*bass)+presence*(.25f+2.1f*treble)+.3f*upper;
   }else{ // SD-2: crunch and lead use distinct gain and clipping stages
    a=feedbackClip(filtered*(1.5f+(dual?14.f:8.f)*drive),clipping==0?3:clipping,dual?3.8f:2.7f);
