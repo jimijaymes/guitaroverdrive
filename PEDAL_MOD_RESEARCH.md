@@ -74,3 +74,26 @@ Research begun 2026-11-22. **Research only:** these are not yet DSP implementati
 5. Compressors/EQ and modulation/delay only as separate DSP modules or plugins.
 
 **Verification gate:** a product listing or anecdote establishes that a named mod exists, not its precise schematic. Do not label an approximate implementation as an exact Keeley, Wampler, Analog Man, Monte Allums or Aion FX circuit without schematic or measurement evidence.
+
+## Confirmed next seven dedicated pedal models — requested 2026-11-22
+
+These are **approved development targets, not yet implemented DSP**. Keep RAT, Big Muff, TS9, SD-1, boost models and existing parameter IDs intact. Each new pedal requires its own topology and independently selectable model entry; do not simulate these by relabelling an existing distortion circuit.
+
+| Model | Required architecture / behaviour | Variants / mod research | Acceptance criteria |
+|---|---|---|---|
+| DOD FX69 Grunge | Original distortion stages, gain and distinctive dual-band LOUD/BUTT/FACE-style control behavior (verify exact revision and control labels) | FX69 vs FX69B revisions, documented component/diode modifications | Level-match stock, independently tune low and high shaping, verify clipping location |
+| DOD FX56 American Metal ("DOD Heavy Metal") | Distinct high-gain clipping and active/passive tone network per verified FX56 schematic | Revision history and documented mods | Do not conflate with Boss HM-2 or DOD FX69 |
+| Boss BD-2 Blues Driver | Cascaded gain with nonlinear response and interactive frequency shaping; model its dynamic behavior | Keeley Phat, Monte Allums Blues Stack/H2O where component changes are documented | Low-drive touch response, guitar-volume cleanup and bass switch behavior |
+| Boss DS-1 Distortion | Distortion amplifier, diode-to-ground clipping and dedicated tone network | Keeley Seeing Eye/Ultra, Monte Allums Rectifier Tri-Gain; verify pre/post-1994 differences | Independent diode network and correct tone-stack transfer |
+| Boss OD-2 Turbo OverDrive | Distinct Normal and Turbo circuit paths with separate gain/headroom/voicing | OD-2 vs OD-2R revision, documented modifications | Turbo is not just a gain multiplier |
+| Boss HM-2 Heavy Metal | Cascaded distortion and highly characteristic resonant Low/High tone network | Original HM-2 vs HM-2W modes; Monte Allums Vintage Plus if verified | Reproduce multi-peak EQ instead of a generic bass/treble shelf |
+| Boss SD-2 Dual OverDrive | Independent Crunch and Lead circuit models with switchable mode | SD-2 mode switching, documented modifications | Crunch and Lead have genuinely different nonlinear architecture |
+
+### Integration plan
+- Expand the pedal choice by **appending** seven entries to preserve existing saved indices: DOD Grunge, DOD Heavy Metal (FX56), Boss BD-2, Boss DS-1, Boss OD-2, Boss HM-2, Boss SD-2.
+- Add a model-specific mode selector for OD-2 Normal/Turbo and SD-2 Crunch/Lead. Only show/enable relevant controls.
+- Existing pedal-specific mods must not leak into other models. Add new mod controls after validating schematic-level changes.
+- Keep global input/output HP/LP, transformer, oversampling, dry/wet mix, and TC/FA-1 pre/post boost available for every model, including distortion bypass.
+- Research schematics, revision differences, clipping topology, RC filtering, tone stack and output level before writing DSP. Benchmark at several drive/tone settings and verify builds.
+
+**Naming note:** DOD Heavy Metal is taken to mean the **FX56 American Metal** in the absence of a specific model number; confirm before implementing if another DOD model was intended.
