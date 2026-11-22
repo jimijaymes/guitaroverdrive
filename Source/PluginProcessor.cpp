@@ -24,6 +24,21 @@ float vintageSilicon(float x,float threshold,float softness){
  const float limited=onset+softness*std::log1p(excess/softness);
  return std::copysign(limited,x);
 }
+float clip(float x,int type);
+// Feedback-network approximation: the diodes shunt gain around the active
+// device instead of hard-limiting the signal at the output node. Solve the
+// monotonic nonlinear transfer by bisection; bounded iterations and no state.
+float feedbackClip(float excitation,int type,float feedbackStrength){
+ if(type==5)return excitation;
+ float lo=juce::jmin(-1.f,excitation-8.f);
+ float hi=juce::jmax(1.f,excitation+8.f);
+ for(int i=0;i<14;++i){
+  const float mid=.5f*(lo+hi);
+  const float residual=mid+feedbackStrength*(mid-clip(mid,type))-excitation;
+  if(residual>0.f)hi=mid;else lo=mid;
+ }
+ return .5f*(lo+hi);
+}
 float clip(float x,int type){
  switch(type){
  case 1:return diode(x,1.7f,1.7f); // LED
@@ -135,10 +150,10 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float booster=s.preTop.lp(pre,ram?9200.f:12500.f,rate)*(ram?1.75f:2.05f);
   const float a=s.muffOne.lp(booster,ram?4900.f:6700.f,rate)
       *(ram?2.8f+11.f*drive:3.2f+13.f*drive);
-  const float first=clipping==0?vintageSilicon(a,ram?.68f:.64f,ram?.22f:.18f):clip(a,clipping);
+  const float first=clipping==0?vintageSilicon(a,ram?.68f:.64f,ram?.22f:.18f):feedbackClip(a,clipping,ram?3.4f:3.0f);
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
-  const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):clip(b,clipping);
+  const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):feedbackClip(b,clipping,ram?3.8f:3.2f);
   const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*modBass,rate);
   const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*modTone,rate);
   const float scoop=m2?(.15f+.85f*amount):(m4?.15f:1.f);
@@ -164,7 +179,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Clipping is exclusively selected by the independent global diode menu.
   
   // Soft feedback limiting retains more signal dynamics than RAT hard clip.
-  const float clipped=clip(amplified,diodeType);
+  const float clipped=feedbackClip(amplified,diodeType,sd?5.2f:4.3f);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
