@@ -139,8 +139,8 @@ void GuitarOverdriveEditor::resized()
  placeKnob(1,{38,278,122,130});
  placeKnob(2,{166,278,122,130});
  placeKnob(3,{294,278,122,130});
- placeKnob(16,{38,205,122,130});
- placeKnob(17,{166,205,122,130});
+ placeKnob(16,{38,205,122,70});
+ placeKnob(17,{166,205,122,70});
  pedalBypass.setBounds(410,385,145,28);
  for(int i=0;i<4;++i)mods[(size_t)i].setBounds(604+(i%2)*265,142+(i/2)*42,255,30);
  placeChoice(9,{605,242,246,58});
