@@ -69,3 +69,16 @@ The pedal menu now appends DOD FX69 Grunge, DOD FX86 Death Metal, Boss BD-2, Bos
 The four independent mod toggles on the new families currently provide bass coupling, presence, clipping density and clean blend, respectively. These are **circuit-inspired development options, not verified named boutique modifications**. Their names should not be marketed as Keeley, Wampler, Analog Man, Monte Allums or Aion FX modifications without a verified component-level implementation.
 
 **Accuracy limits:** All seven algorithms are first-pass topology-inspired approximations. In particular, HM-2's resonant EQ is not yet an exact dual-resonance filter model; FX86 gain and EQ require schematic verification; and OD-2/SD-2 mode-specific component networks require further research. Stock selections mean stock-*inspired* starting voicings, not hardware-calibrated or component-accurate clones. Do not claim completed hardware emulation or audio validation until reference measurements and listening tests are performed. Oversampling, transformer, optional boost and pedal bypass remain in the shared processing path.
+
+## Stock / named circuit mod selector (work in progress)
+The new **Circuit Mod** selector is separate from the **Diode / Clipping** selector. Stock (default) uses each pedal family's default clipping topology. On DS-1 the Seeing Eye setting substitutes a red LED for one of the stock silicon diodes in the post-amplifier hard clipper; Ultra uses an LED plus silicon in series on one side and an LED on the other. Manual diode choices override this automatic network **at the DS-1 shunt clipping stage**, not at an unrelated global waveshaper. DS-1 Ultra + bass is an additional non-historical voicing, not an official Keeley mod. The published Keeley baseline includes many additional capacitor and resistor changes and a 47 pF capacitor across D4/D5; the current DSP is a partial approximation, not a complete component-level Keeley emulation.
+
+BD-2 options expose stock, Phat 68nF, Phat 82nF and a combined asymmetric clipping voicing. The two capacitor options are based on documented C100 switch experiments, but the current DSP approximates the bass response rather than solving the actual tone circuit. Manual clipping overrides automatic choices within the feedback stages. HM-2 options include bass response, presence response and low-tuned EQ; these are development voicings, **not verified commercial named mods**. For the other new pedals the Circuit Mod menu is disabled pending better schematic evidence; the generic four toggles remain circuit-inspired options.
+
+Reference documentation:
+- https://stompboxelectronics.com/2022/10/11/top9-boss-ds1-modifications/
+- https://www.diystompboxes.com/DIYFiles/up/Build_Your_Own_DS-1_Distortion.pdf
+- https://www.cpearson.me.uk/2021/12/20/diy-boss-bd-2-blues-driver-keeley-mod/
+- https://www.synfo.nl/servicemanuals/Boss/BOSS_SD-2_SERVICE_NOTES.pdf
+
+**Important:** these algorithms remain approximations, not measured hardware-accurate clones. This change has not been DAW auditioned or calibrated against original pedals.
