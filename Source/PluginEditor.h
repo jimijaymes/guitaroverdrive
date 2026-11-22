@@ -15,5 +15,8 @@ private:
  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> pedalBypassAttachment,boostMidAttachment;
  std::array<juce::ToggleButton,4> mods;
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>,4> modAttachments;
+ void updateContext();
+ void placeKnob(int index,juce::Rectangle<int> bounds);
+ void placeChoice(int index,juce::Rectangle<int> bounds);
  JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(GuitarOverdriveEditor)
 };
