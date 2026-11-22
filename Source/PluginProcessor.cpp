@@ -256,10 +256,33 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   }else if(model==9){ // HM-2: high-gain stages plus resonant dual-band EQ
    a=feedbackClip(filtered*(3.f+24.f*drive),clipping==0?3:clipping,4.5f);
    b=clip(s.newGain2.lp(a*(2.5f+8.f*drive),6500.f,rate),clipping);
-   const float low=s.newBass.lp(b,(modCircuit==3?65.f:110.f)+240.f*bass,rate);
-   const float upper=b-s.newTreble.lp(b,700.f+1700.f*treble,rate);
-   const float presence=s.newPresence.lp(upper,modCircuit==3?1700.f:2400.f,rate);
-   y=low*(.5f+1.7f*bass)+presence*(.25f+2.1f*treble)+.3f*upper;
+   // Stock HM-2 EQ: three gyrator-based series-resonant branches.
+   // 87 Hz Low; 960 Hz + 1279 Hz jointly controlled by High.
+   // TPT SVF bandpass approximation to the resonant branches, with
+   // reciprocal boost/cut about 50% (rather than bass/treble shelves).
+   // Mod C approximates the published Dunwich lower-tuned gyrator set.
+   const bool lowTuned=modCircuit==3;
+   const float frequencies[3]={lowTuned?62.48f:86.8f,
+                               lowTuned?716.67f:958.5f,
+                               lowTuned?1065.5f:1278.6f};
+   const float controls[3]={bass,treble,treble};
+   y=b;
+   for(int band=0;band<3;++band){
+    const float frequency=juce::jmin(frequencies[band],rate*.40f);
+    const float q=band==0?2.5f:2.2f;
+    const float g=std::tan(juce::MathConstants<float>::pi*frequency/rate);
+    const float k=1.f/q;
+    const float a1=1.f/(1.f+g*(g+k));
+    float& ic1=s.hm2EqIc1[(size_t)band];
+    float& ic2=s.hm2EqIc2[(size_t)band];
+    const float v1=a1*(ic1+g*(b-ic2));
+    const float v2=ic2+g*v1;
+    ic1=2.f*v1-ic1;
+    ic2=2.f*v2-ic2;
+    const float db=(controls[band]-.5f)*(band==0?32.f:18.f);
+    const float A=std::pow(10.f,db/40.f);
+    y+=(A-1.f/A)*k*v1;
+   }
   }else{ // SD-2: crunch and lead use distinct gain and clipping stages
    a=feedbackClip(filtered*(1.5f+(dual?14.f:8.f)*drive),clipping==0?3:clipping,dual?3.8f:2.7f);
    b=dual?feedbackClip(s.newGain2.hp(a,190.f,rate)*(2.f+9.f*drive),clipping==0?3:clipping,4.6f):a;
