@@ -64,9 +64,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("input","Input dB",-24,24,0);f("drive","Drive %",0,100,50);f("tone","Tone %",0,100,50);f("level","Level dB",-36,18,0);f("mix","Mix %",0,100,100);
  f("modAmount","Mod Amount %",0,100,50);f("modTone","Mod Tone %",0,100,50);f("modBass","Mod Bass %",0,100,50);
  f("transformerDrive","Transformer Drive dB",-24,24,0);
- f("tcBoostGain","TC Preamp Boost dB",0,24,12);
+ f("tcBoostGain","Preamp Boost dB",0,24,12);
+ f("boostMidFreq","Preamp Mid Frequency Hz",180,7200,1100);
+ f("boostMidGain","Preamp Mid Gain dB",-15,15,0);
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
+ p.add(std::make_unique<B>(juce::ParameterID{"boostMidOn",1},"Preamp Mid EQ Enabled",false));
+ p.add(std::make_unique<B>(juce::ParameterID{"pedalBypass",1},"Distortion Pedal Bypass",false));
+ p.add(std::make_unique<C>(juce::ParameterID{"boostModel",1},"Boost Model",juce::StringArray{"TC Integrated Preamp","Boss FA-1"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"tcBoostPosition",1},"TC Preamp Boost",juce::StringArray{"Off","Pre Pedal","Post Pedal"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"feedbackCap",1},"TS9 / SD-1 HPF Capacitor",juce::StringArray{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
@@ -115,18 +120,32 @@ float GuitarOverdriveProcessor::transformer(float x,int channel,float drive,floa
  const float blend=.14f+.36f*character;
  return (1.f-blend)*x+blend*amp+coreDist-(x-high)*(.015f+.065f*character);
 }
-float GuitarOverdriveProcessor::tcBoost(float x,int channel,float boostDb,float rate,bool pre){
+float GuitarOverdriveProcessor::tcBoost(float x,int channel,float boostDb,float rate,bool pre,int model,bool midOn,float midHz,float midDb){
  auto& st=states[(size_t)channel];
- // TC Integrated Preamp-style gain/impedance-shaping approximation.
- // Separate pre/post state prevents stale filter memory on position changes.
  auto& hp=pre?st.boostPreHp:st.boostPostHp;
  auto& lp=pre?st.boostPreLp:st.boostPostLp;
- const float coupled=hp.hp(x,28.f,rate);
- const float shaped=lp.lp(coupled,16000.f,rate);
- const float g=gain(boostDb);
- const float driven=shaped*g;
- // Mild amplifier saturation, normalized to preserve boost below the rails.
- const float rail=9.f;
+ // Two distinct boost voicings: TC tighter input / extended treble;
+ // FA-1 broader low end, softer upper bandwidth and output drive.
+ const float coupled=hp.hp(x,model==0?38.f:16.f,rate);
+ float shaped=lp.lp(coupled,model==0?17000.f:12500.f,rate);
+ if(midOn && std::abs(midDb)>.001f){
+  // TPT state-variable bell with broad 1073-inspired proportional-Q response.
+  // Gain-dependent bandwidth: broader at small boosts/cuts, slightly narrower
+  // at larger settings. Not a recreation of the 1073 inductor circuit.
+  const float q=.72f+.032f*std::abs(midDb);
+  const float g=std::tan(juce::MathConstants<float>::pi*juce::jlimit(100.f,rate*.40f,midHz)/rate);
+  const float k=1.f/q;
+  float& ic1=pre?st.midPre1:st.midPost1;
+  float& ic2=pre?st.midPre2:st.midPost2;
+  const float a1=1.f/(1.f+g*(g+k));
+  const float v1=a1*(ic1+g*(shaped-ic2));
+  const float v2=ic2+g*v1;
+  ic1=2.f*v1-ic1;ic2=2.f*v2-ic2;
+  const float a=std::pow(10.f,midDb/40.f);
+  shaped+=(a-1.f/a)*k*v1;
+ }
+ const float driven=shaped*gain(boostDb);
+ const float rail=model==0?9.f:6.5f;
  return rail*std::tanh(driven/rail);
 }
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
@@ -215,6 +234,10 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
  const float amount=v("modAmount")*.01f,modTone=v("modTone")*.01f,modBass=v("modBass")*.01f;
  const float xfDrive=gain(v("transformerDrive")),ih=v("inputHP"),il=v("inputLP"),oh=v("outputHP"),ol=v("outputLP");
  const int boostPosition=juce::jlimit(0,2,(int)v("tcBoostPosition"));
+ const int boostModel=juce::jlimit(0,1,(int)v("boostModel"));
+ const bool boostMidOn=v("boostMidOn")>.5f;
+ const bool bypassPedal=v("pedalBypass")>.5f;
+ const float boostMidHz=v("boostMidFreq"),boostMidDb=v("boostMidGain");
  const float boostDb=v("tcBoostGain");
  const int model=juce::jlimit(0,3,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
  for(int c=channels;c<2;++c)scratch.clear(c,0,count);
@@ -228,9 +251,9 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
   for(size_t i=0;i<up.getNumSamples();++i){
    float x=s.inputHp.hp(samples[i],ih,rate);
    x=s.inputLp.lp(x,il,rate);
-   if(boostPosition==1)x=tcBoost(x,c,boostDb,rate,true);
-   x=pedal(x,c,drive,tone,level,model,mod,amount,modTone,modBass,rate);
-   if(boostPosition==2)x=tcBoost(x,c,boostDb,rate,false);
+   if(boostPosition==1)x=tcBoost(x,c,boostDb,rate,true,boostModel,boostMidOn,boostMidHz,boostMidDb);
+   if(!bypassPedal)x=pedal(x,c,drive,tone,level,model,mod,amount,modTone,modBass,rate);
+   if(boostPosition==2)x=tcBoost(x,c,boostDb,rate,false,boostModel,boostMidOn,boostMidHz,boostMidDb);
    x=transformer(x,c,xfDrive,.5f,rate);
    x=s.outputHp.hp(x,oh,rate);
    samples[i]=s.outputLp.lp(x,ol,rate);
