@@ -28,7 +28,7 @@ float GuitarOverdriveProcessor::OnePole::lp(float x,float hz,float sr){
  const float a=coeff(hz,sr);z=a*z+(1.f-a)*x;return z;
 }
 juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::layout(){
- using F=juce::AudioParameterFloat;using C=juce::AudioParameterChoice;
+ using F=juce::AudioParameterFloat;using C=juce::AudioParameterChoice;using B=juce::AudioParameterBool;
  juce::AudioProcessorValueTreeState::ParameterLayout p;
  auto f=[&](const char* id,const char* label,float lo,float hi,float def){p.add(std::make_unique<F>(juce::ParameterID{id,1},label,juce::NormalisableRange<float>(lo,hi,.1f),def));};
  f("input","Input dB",-24,24,0);f("drive","Drive %",0,100,50);f("tone","Tone %",0,100,50);f("level","Level dB",-36,18,0);f("mix","Mix %",0,100,100);
@@ -37,7 +37,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  f("inputHP","Input HP Hz",10,1500,20);f("inputLP","Input LP Hz",1000,20000,20000);
  f("outputHP","Output HP Hz",10,1500,20);f("outputLP","Output LP Hz",1000,20000,20000);
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1"},0));
- p.add(std::make_unique<C>(juce::ParameterID{"mod",1},"Mod",juce::StringArray{"Stock","Mod 1","Mod 2","Mod 3","Mod 4"},0));
+ for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
  p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Stock","LED","Germanium","Asymmetric","MOSFET-inspired","No diodes"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"oversampling",1},"Oversampling",juce::StringArray{"1x","2x","4x","8x"},2));
@@ -84,11 +84,15 @@ float GuitarOverdriveProcessor::transformer(float x,int channel,float drive,floa
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
  auto& s=states[(size_t)channel];
  const int clipping=juce::jlimit(0,5,(int)parameters.getRawParameterValue("clipping")->load());
+ const bool m1=parameters.getRawParameterValue("mod1")->load()>.5f;
+ const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
+ const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
+ const bool m4=parameters.getRawParameterValue("mod4")->load()>.5f;
  float y=x;
  if(model==0){
   // RAT: frequency-selective high-gain op-amp followed by hard diodes to ground.
-  const float ruetz=mod==1?amount:0.f;
-  const float fat=mod==3?amount:0.f;
+  const float ruetz=m1?amount:0.f;
+  const float fat=m3?amount:0.f;
   const float pre=s.preBass.hp(x,45.f+135.f*(1.f-fat),rate);
   const float upper=s.preTop.lp(pre,juce::jmax(900.f,13000.f-7000.f*drive),rate);
   const float opGain=1.f+90.f*drive*drive*(1.f-.58f*ruetz);
@@ -97,17 +101,17 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float maxStep=juce::jmax(.00001f,300000.f/rate/9.f);
   s.opamp+=juce::jlimit(-maxStep,maxStep,desired-s.opamp);
   const float op=juce::jlimit(-4.f,4.f,s.opamp);
-  const int diodeType=mod==2?1:clipping;
+  const int diodeType=clipping;
   y=clip(op,diodeType);
   // RAT Filter rotates clockwise towards darker sound.
   const float cutoff=350.f*std::pow(50.f,1.f-tone);
   y=s.ratTone.lp(y,cutoff,rate);
-  if(mod==4)y=(1.f-.5f*amount)*y+.5f*amount*x;
+  if(m4)y=(1.f-.5f*amount)*y+.5f*amount*x;
   y*=.60f;
  }else if(model==1){
   // Big Muff: two cascaded transistor gain/diode clipping stages, then
   // a passive bass/treble blend with a characteristic mid scoop.
-  const float bassBoost=mod==3?modBass:0.f;
+  const float bassBoost=m3?modBass:0.f;
   const float pre=s.preBass.hp(x,45.f-25.f*bassBoost,rate);
   const float a=s.muffOne.lp(pre,6200.f,rate)*(2.5f+12.f*drive);
   const float first=clip(a,clipping==0?0:clipping);
@@ -115,36 +119,36 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float second=clip(b,clipping==0?0:clipping);
   const float low=s.muffToneLow.lp(second,420.f+280.f*modBass,rate);
   const float high=second-s.muffToneHigh.lp(second,900.f+900.f*modTone,rate);
-  const float scoop=mod==2?(.15f+.85f*amount):(mod==4?.15f:1.f);
+  const float scoop=m2?(.15f+.85f*amount):(m4?.15f:1.f);
   const float scooped=low*(1.f-tone)+high*tone;
   const float flat=.55f*second+.45f*scooped;
   y=scoop*scooped+(1.f-scoop)*flat;
-  if(mod==1)y=second; // tone-stack bypass
-  if(mod==3)y=.68f*y+.32f*std::tanh(second*1.5f);
+  if(m1)y=second; // tone-stack bypass
+  if(m3)y=.68f*y+.32f*std::tanh(second*1.5f);
   y*=.8f;
  }else{
   // Tube Screamer and SD-1: feedback-loop diode clipping, unlike RAT.
   // The input bass corner shapes which frequencies reach the feedback clipper.
   const bool sd=model==3;
   float bassCorner=sd?720.f:720.f;
-  if(mod==1 && !sd)bassCorner=720.f-490.f*amount; // TS bass+
-  if(mod==2 && sd)bassCorner=720.f-480.f*amount; // SD-1 bass
-  if(mod==3)bassCorner=720.f-350.f*modBass;
+  if(m1 && !sd)bassCorner=720.f-490.f*amount; // TS bass+
+  if(m2 && sd)bassCorner=720.f-480.f*amount; // SD-1 bass
+  if(m3)bassCorner=juce::jmin(bassCorner,720.f-350.f*modBass);
   const float filtered=(sd?s.sdPre:s.tsPre).hp(x,bassCorner,rate);
   const float amplified=filtered*(1.5f+18.f*drive*drive);
   // Stock SD-1 has asymmetrical clipping, stock TS symmetric.
   int diodeType=clipping;
   if(clipping==0 && sd)diodeType=3;
-  if(mod==4)diodeType=amount>.5f?1:2;
-  if(mod==3)diodeType=amount>.5f?3:diodeType;
+  // Clipping is exclusively selected by the independent global diode menu.
+  
   // Soft feedback limiting retains more signal dynamics than RAT hard clip.
   const float clipped=clip(amplified,diodeType);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
-  if(mod==2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
-  const float cutoff=850.f*std::pow(12.f,tone);
+  if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
+  const float cutoff=850.f*std::pow(12.f,tone)*(m4?(1.f+.5f*modTone):1.f);
   y=s.tsTone.lp(y,cutoff,rate);
-  if(mod==1&&sd)y=s.preMid.lp(y,8500.f-3500.f*amount,rate); // C6 mod
+  if(m1&&sd)y=s.preMid.lp(y,8500.f-3500.f*amount,rate); // C6 mod
   y*=1.25f;
  }
  return y*gain(level);
@@ -154,7 +158,7 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
  const float in=gain(v("input")),level=v("level"),drive=v("drive")*.01f,tone=v("tone")*.01f,mix=v("mix")*.01f;
  const float amount=v("modAmount")*.01f,modTone=v("modTone")*.01f,modBass=v("modBass")*.01f;
  const float xfDrive=gain(v("transformerDrive")),ih=v("inputHP"),il=v("inputLP"),oh=v("outputHP"),ol=v("outputLP");
- const int model=juce::jlimit(0,3,(int)v("pedal")),mod=juce::jlimit(0,4,(int)v("mod"));
+ const int model=juce::jlimit(0,3,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
  for(int c=channels;c<2;++c)scratch.clear(c,0,count);
  for(int c=0;c<channels;++c){const float* src=buffer.getReadPointer(c);float* dst=scratch.getWritePointer(c);for(int i=0;i<count;++i)dst[i]=src[i]*in;}
  auto& os=*oversamplers[(size_t)osIndex];
