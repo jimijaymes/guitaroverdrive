@@ -29,7 +29,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   choices[9].box.setEnabled(pedal==6||pedal==7||pedal==9);choices[9].label.setEnabled(pedal==6||pedal==7||pedal==9);
   const int previousModSelection=choices[9].box.getSelectedId();
   choices[9].box.clear(juce::dontSendNotification);
-  const juce::StringArray modNames=pedal==7?juce::StringArray{"Stock","Keeley Seeing Eye","Keeley Ultra","Ultra + Seeing Eye"}:pedal==6?juce::StringArray{"Stock","Phat 68nF","Phat 82nF","Phat + diode"}:juce::StringArray{"Stock","Bass response","Presence response","Low-tuned EQ"};
+  const juce::StringArray modNames=pedal==7?juce::StringArray{"Stock","Keeley Seeing Eye","Keeley Ultra","Ultra + bass"}:pedal==6?juce::StringArray{"Stock","Phat 68nF","Phat 82nF","Phat + asymmetric"}:juce::StringArray{"Stock","Bass response","Presence response","Low-tuned EQ"};
   for(int j=0;j<modNames.size();++j)choices[9].box.addItem(modNames[j],j+1);
   choices[9].box.setSelectedId(juce::jlimit(1,4,previousModSelection),juce::dontSendNotification);
   const char* names[11][4]={{"RUETZ","GAIN EQ / FILTER","FAT","CLEAN BLEND"},{"TONE BYPASS","MID CONTROL","CREAMY / BASS","FLAT MIDS"},{"BASS+","808 VOICING","EXTENDED BASS","BRIGHT TONE"},{"C6 FILTER","BASS MOD","EXTENDED BASS","BRIGHT TONE"},
