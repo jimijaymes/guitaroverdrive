@@ -29,6 +29,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   addAndMakeVisible(k.label);
   k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,ids[i],k.slider);
  }
+ for(int i=0;i<4;++i){auto& k=modKnobs[(size_t)i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,80,20);k.slider.setColour(juce::Slider::rotarySliderFillColourId,accent);addAndMakeVisible(k.slider);k.label.setJustificationType(juce::Justification::centred);k.label.setMinimumHorizontalScale(.68f);k.label.setColour(juce::Label::textColourId,text);addAndMakeVisible(k.label);k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,"modControl"+juce::String(i+1),k.slider);}
  const char* cids[]={"pedal","muffVersion","feedbackCap","clipping","transformer","oversampling","tcBoostPosition","boostModel","dualMode","modCircuit"};
  const char* names[]={"PEDAL MODEL","BIG MUFF VERSION","FEEDBACK CAPACITOR","CLIPPING DIODES","TRANSFORMER MODEL","OVERSAMPLING","BOOST ROUTING","BOOST CIRCUIT","PEDAL MODE","CIRCUIT MOD"};
  const juce::StringArray opts[]={
@@ -91,23 +92,38 @@ void GuitarOverdriveEditor::updateContext()
   }
  }
  for(int i=0;i<4;++i)mods[(size_t)i].setButtonText(modNames[pedal][i]);
- // Only expose controls actually referenced by the selected pedal's mod branches.
- const bool m1=mods[0].getToggleState(),m2=mods[1].getToggleState(),m3=mods[2].getToggleState(),m4=mods[3].getToggleState();
- const bool amount=(pedal==0&&(m1||m3||m4))||(muff&&m2)||(ts&&m1)||(sd&&(m1||m2))||(newer&&m1);
- const bool modTone=(muff)||(ts&&m4)||(sd&&m4)||(newer&&m2);
- const bool modBass=(muff)||(ts&&m3)||(sd&&m3)||(newer&&m3);
- showKnob(5,amount);showKnob(6,modTone);showKnob(7,modBass);
- juce::String amountName="MOD AMOUNT";
- if(pedal==0)amountName=m1?"RUETZ AMOUNT":(m3?"FAT AMOUNT":"CLEAN BLEND");
- else if(muff)amountName="MID SCOOP / FLAT";
- else if(ts)amountName="BASS+ AMOUNT";
- else if(sd)amountName=m1?"C6 FILTER AMOUNT":"BASS MOD AMOUNT";
- else if(newer)amountName="BASS COUPLING";
- knobs[5].label.setText(amountName,juce::dontSendNotification);
- knobs[6].label.setText(muff?"TONE STACK TREBLE":(newer?"PRESENCE AMOUNT":"BRIGHT TONE AMOUNT"),juce::dontSendNotification);
- knobs[7].label.setText(muff?"TONE STACK BASS":(newer?"CLIP DENSITY":"EXTENDED BASS"),juce::dontSendNotification);
- showKnob(16,newer&&(pedal==4||pedal==5||pedal==9));
- showKnob(17,newer&&(pedal==4||pedal==5||pedal==9));
+ // Every enabled modification owns its own parameter and dedicated control.
+ const bool usesControl[11][4]={
+  {true,false,true,true},{false,true,true,false},{true,false,true,true},
+  {true,true,true,true},{true,true,true,false},{true,true,true,false},
+  {true,true,true,false},{true,true,true,false},{true,true,true,false},
+  {true,true,true,false},{true,true,true,false}
+ };
+ const char* controlLabels[11][4]={
+  {"RUETZ AMOUNT","","FAT AMOUNT","CLEAN BLEND"},
+  {"","MID RESPONSE","BASS RESPONSE",""},
+  {"BASS+ AMOUNT","","EXTENDED BASS","BRIGHTNESS"},
+  {"C6 FILTER","BASS MOD","EXTENDED BASS","BRIGHTNESS"},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""},
+  {"PHAT AMOUNT","PRESENCE","CLIP DENSITY",""},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""},
+  {"BASS COUPLING","PRESENCE","CLIP DENSITY",""}
+ };
+ for(int i=0;i<4;++i){
+  const bool show=mods[(size_t)i].getToggleState()&&usesControl[pedal][i];
+  modKnobs[(size_t)i].slider.setVisible(show);
+  modKnobs[(size_t)i].label.setVisible(show);
+  modKnobs[(size_t)i].label.setText(controlLabels[pedal][i],juce::dontSendNotification);
+ }
+ for(int i=5;i<=7;++i){knobs[(size_t)i].slider.setVisible(false);knobs[(size_t)i].label.setVisible(false);}
+ const bool graphicEq=pedal==4||pedal==5||pedal==9;
+ showKnob(2,!graphicEq);
+ showKnob(16,graphicEq);showKnob(17,graphicEq);
+ knobs[16].label.setText("LOW EQ",juce::dontSendNotification);
+ knobs[17].label.setText("HIGH EQ",juce::dontSendNotification);
  const bool boost=choices[6].box.getSelectedItemIndex()>0;
  showChoice(7,boost);showKnob(13,boost);boostMidOn.setVisible(boost);
  const bool mid=boost&&boostMidOn.getToggleState();
@@ -138,14 +154,15 @@ void GuitarOverdriveEditor::resized()
  placeChoice(8,{38,205,230,58});
  placeKnob(1,{38,278,122,130});
  placeKnob(2,{166,278,122,130});
- placeKnob(3,{294,278,122,130});
- placeKnob(16,{38,205,122,70});
- placeKnob(17,{166,205,122,70});
+ placeKnob(3,{422,278,122,130});
+ placeKnob(16,{166,278,122,130});
+ placeKnob(17,{294,278,122,130});
  pedalBypass.setBounds(410,385,145,28);
  for(int i=0;i<4;++i)mods[(size_t)i].setBounds(604+(i%2)*265,142+(i/2)*42,255,30);
  placeChoice(9,{605,242,246,58});
  placeChoice(3,{869,242,248,58});
- for(int i=0;i<3;++i)placeKnob(5+i,{603+i*175,305,166,110});
+ for(int i=0;i<4;++i){auto& k=modKnobs[(size_t)i];const int x=603+i*132;k.label.setBounds(x,309,124,23);k.slider.setBounds(x,332,124,88);}
+ for(int i=5;i<=7;++i)placeKnob(i,{603+(i-5)*175,305,166,110});
  placeKnob(0,{38,498,120,125});
  placeKnob(4,{167,498,120,125});
  placeChoice(6,{310,496,240,58});
