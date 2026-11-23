@@ -30,15 +30,15 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
   k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,ids[i],k.slider);
  }
  for(int i=0;i<4;++i){auto& k=modKnobs[(size_t)i];k.slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);k.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,80,20);k.slider.setColour(juce::Slider::rotarySliderFillColourId,accent);addAndMakeVisible(k.slider);k.label.setJustificationType(juce::Justification::centred);k.label.setMinimumHorizontalScale(.68f);k.label.setColour(juce::Label::textColourId,text);addAndMakeVisible(k.label);k.attach=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.parameters,"modControl"+juce::String(i+1),k.slider);}
- const char* cids[]={"pedal","muffVersion","feedbackCap","clipping","transformer","oversampling","tcBoostPosition","boostModel","dualMode","modCircuit"};
- const char* names[]={"PEDAL MODEL","BIG MUFF VERSION","FEEDBACK CAPACITOR","CLIPPING DIODES","TRANSFORMER MODEL","OVERSAMPLING","BOOST ROUTING","BOOST CIRCUIT","PEDAL MODE","CIRCUIT MOD"};
+ const char* cids[]={"pedal","muffVersion","feedbackCap","clipping","transformer","oversampling","tcBoostPosition","boostModel","dualMode","modCircuit","supplyVoltage"};
+ const char* names[]={"PEDAL MODEL","BIG MUFF VERSION","FEEDBACK CAPACITOR","CLIPPING DIODES","TRANSFORMER MODEL","OVERSAMPLING","BOOST ROUTING","BOOST CIRCUIT","PEDAL MODE","CIRCUIT MOD","PEDAL SUPPLY"};
  const juce::StringArray opts[]={
  {"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD Grunge FX69","DOD Death Metal FX86","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},
  {"Triangle","Ram's Head"},{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},
  {"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","High-Vf Silicon / LED (Asymmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)","Half-Wave Silicon (Positive Only)"},
  {"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},
  {"1x","2x","4x","8x"},{"Off","Pre Pedal","Post Pedal"},{"TC Integrated Preamp","Boss FA-1"},
- {"Normal / Crunch","Turbo / Lead"},{"Stock","Mod A","Mod B","Mod C"}};
+ {"Normal / Crunch","Turbo / Lead"},{"Stock","Mod A","Mod B","Mod C"},{"9 V","12 V","18 V"}};
  for(size_t i=0;i<choices.size();++i){
   auto& c=choices[i];c.label.setText(names[i],juce::dontSendNotification);
   c.label.setColour(juce::Label::textColourId,text);addAndMakeVisible(c.label);
@@ -148,7 +148,8 @@ void GuitarOverdriveEditor::paint(juce::Graphics& g)
 }
 void GuitarOverdriveEditor::resized()
 {
- placeChoice(0,{38,137,500,58});
+ placeChoice(0,{38,137,325,58});
+ placeChoice(10,{374,137,164,58});
  placeChoice(1,{38,205,230,58});
  placeChoice(2,{286,205,250,58});
  placeChoice(8,{38,205,230,58});
