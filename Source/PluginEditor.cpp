@@ -35,7 +35,7 @@ GuitarOverdriveEditor::GuitarOverdriveEditor(GuitarOverdriveProcessor& p):AudioP
  const juce::StringArray opts[]={
  {"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD Grunge FX69","DOD Death Metal FX86","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},
  {"Triangle","Ram's Head"},{"Stock (1x)","Larger (1.5x)","Smaller (0.68x)"},
- {"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","High-Vf Silicon / LED (Asymmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)"},
+ {"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","High-Vf Silicon / LED (Asymmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)","Half-Wave Silicon (Positive Only)"},
  {"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},
  {"1x","2x","4x","8x"},{"Off","Pre Pedal","Post Pedal"},{"TC Integrated Preamp","Boss FA-1"},
  {"Normal / Crunch","Turbo / Lead"},{"Stock","Mod A","Mod B","Mod C"}};
