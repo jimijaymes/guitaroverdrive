@@ -52,7 +52,7 @@ DiodePair diodePair(int type,int stockPositive=1,int stockNegative=1)
 {
  if(type==5)return {junction(0),junction(0),1,1,false};
  if(type==3)return {junction(0),junction(0),1,2,true};
- if(type==7)return {{2.30f,.11f,.17f},{2.30f,.11f,.17f},1,1,true};
+ if(type==7)return {junction(9),junction(1),1,1,true}; // high-Vf silicon one polarity, single LED opposite
  if(type==10)return {junction(0),junction(1),2,1,true}; // two Si in series vs one LED
  const Junction j=junction(type);
  return {j,j,stockPositive,stockNegative,true};
@@ -139,7 +139,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD FX69 Grunge","DOD FX86 Death Metal","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
- p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","High-Vf Silicon / LED (Asymmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"oversampling",1},"Oversampling",juce::StringArray{"1x","2x","4x","8x"},2));
  return p;
