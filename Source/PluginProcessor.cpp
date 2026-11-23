@@ -30,9 +30,12 @@ float clip(float x,int type);
 // monotonic nonlinear transfer by bisection; bounded iterations and no state.
 float feedbackClip(float excitation,int type,float feedbackStrength){
  if(type==5)return excitation;
- float lo=juce::jmin(-1.f,excitation);
- float hi=juce::jmax(1.f,excitation);
- for(int i=0;i<14;++i){
+ // Feedback diode conduction is monotonic; bracket the actual solution.
+ // The previous fixed [-1,+1] bracket saturated high-level inputs even
+ // when the chosen diode threshold was much higher.
+ const float extent=juce::jmax(1.f,std::abs(excitation));
+ float lo=-extent,hi=extent;
+ for(int i=0;i<20;++i){
   const float mid=.5f*(lo+hi);
   const float residual=mid+feedbackStrength*(mid-clip(mid,type))-excitation;
   if(residual>0.f)hi=mid;else lo=mid;
@@ -173,9 +176,14 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float hpFast=s.preBass.hp(x,1539.f*(1.f+12.f*ruetz),rate);
   const float hpSlow=s.preMid.hp(x,60.5f*(1.f-.65f*fat),rate);
   const float upper=s.preTop.lp(x,20000.f,rate);
-  const float opGain=1.f+((100000.f*drive*drive)/47.f)*(.18f)* (1.f-.58f*ruetz);
+  // Effective feedback gain rises nonlinearly with distortion control.
+  // Bound the gain to avoid driving the op-amp into its rails at nearly
+  // every knob position; the diode clipper remains a separate stage.
+  const float opGain=1.f+juce::jmin(450.f,420.f*drive*drive)*(1.f-.58f*ruetz);
   const float desired=upper+hpFast*(opGain-1.f)*.55f+hpSlow*(opGain-1.f)*.45f;
   // LM308-style slew-limited stage, with op-amp supply rail approximation.
+  // Slew limit in normalized audio units per sample (approximate,
+  // not a literal LM308 voltage-to-digital conversion).
   const float maxStep=juce::jmax(.00001f,300000.f/rate/9.f);
   s.opamp+=juce::jlimit(-maxStep,maxStep,desired-s.opamp);
   const float op=juce::jlimit(-4.f,4.f,s.opamp);
