@@ -25,6 +25,26 @@ float vintageSilicon(float x,float threshold,float softness){
  return std::copysign(limited,x);
 }
 float clip(float x,int type);
+// Implicit diode-feedback stage: a monotonic exponential I/V branch.
+// The scaling is calibrated in normalized audio units, not literal volts.
+// Asymmetric mode uses one silicon junction in one direction and two in
+// series in the other, as in the stock SD-1 feedback network.
+float diodeFeedbackStage(float excitation,float strength,float positiveV,float negativeV)
+{
+ const float extent=juce::jmax(1.f,std::abs(excitation));
+ float lo=-extent,hi=extent;
+ for(int i=0;i<18;++i)
+ {
+  const float v=.5f*(lo+hi);
+  const float threshold=v>=0.f?positiveV:negativeV;
+  const float thermal=.055f*(threshold/.65f);
+  const float excess=juce::jmax(0.f,std::abs(v)-threshold*.65f);
+  const float conduction=thermal*std::expm1(juce::jmin(16.f,excess/thermal));
+  const float residual=v+std::copysign(strength*conduction,v)-excitation;
+  if(residual>0.f)hi=v;else lo=v;
+ }
+ return .5f*(lo+hi);
+}
 // Feedback-network approximation: the diodes shunt gain around the active
 // device instead of hard-limiting the signal at the output node. Solve the
 // monotonic nonlinear transfer by bisection; bounded iterations and no state.
@@ -184,8 +204,15 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // LM308-style slew-limited stage, with op-amp supply rail approximation.
   // Slew limit in normalized audio units per sample (approximate,
   // not a literal LM308 voltage-to-digital conversion).
-  const float maxStep=juce::jmax(.00001f,300000.f/rate/9.f);
-  s.opamp+=juce::jlimit(-maxStep,maxStep,desired-s.opamp);
+  // LM308 slew rate approximately 0.3 V/us. Treat one normalized unit
+  // as one volt at the virtual-ground-referenced op-amp output.
+  const float maxStep=300000.f/rate;
+  const float slewLimited=s.opamp+juce::jlimit(-maxStep,maxStep,desired-s.opamp);
+  // Gain-bandwidth limitation: at higher distortion gain the closed-loop
+  // stage cannot follow the same high-frequency excursions.
+  const float gbwHz=500000.f;
+  const float closedLoopBandwidth=juce::jlimit(120.f,rate*.45f,gbwHz/juce::jmax(1.f,opGain));
+  s.opamp=s.ratSlew.lp(slewLimited,closedLoopBandwidth,rate);
   const float op=juce::jlimit(-4.f,4.f,s.opamp);
   const int diodeType=clipping;
   y=clip(op,diodeType);
@@ -351,7 +378,12 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Clipping is exclusively selected by the independent global diode menu.
   
   // Soft feedback limiting retains more signal dynamics than RAT hard clip.
-  const float clipped=feedbackClip(amplified,diodeType,sd?5.2f:4.3f);
+  // Use the exponential implicit feedback network for stock silicon
+  // clipping. Explicit alternate diode selections keep their existing
+  // user-selectable clipping behaviour.
+  const float clipped=clipping==0
+      ? diodeFeedbackStage(amplified,sd?0.55f:0.48f,.65f,sd?1.30f:.65f)
+      : feedbackClip(amplified,diodeType,sd?5.2f:4.3f);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
