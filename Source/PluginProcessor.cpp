@@ -4,6 +4,11 @@
 namespace {
 float coeff(float hz,float sr){return std::exp(-juce::MathConstants<float>::twoPi*juce::jlimit(1.f,sr*.45f,hz)/sr);}
 float gain(float db){return juce::Decibels::decibelsToGain(db);}
+// Calibrated peak-sample convention: a -14 dBFS PEAK 1 kHz sine
+// corresponds to 0 dBu = 0.775 Vrms = 1.0960155 Vpeak.
+// This is not a -14 dBFS RMS reference (which differs by 3.01 dB).
+constexpr float voltsPerFullScale=5.492f; // 0.775*sqrt(2)*10^(14/20)
+constexpr float fullScalePerVolt=1.f/voltsPerFullScale;
 float diode(float x,float positive,float negative){
  // Continuous soft diode conduction: individual positive/negative thresholds.
  const float v=x>=0?positive:negative;
@@ -440,7 +445,12 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   if(m2 && sd)bassCorner=(720.f-480.f*a2)/capRatio; // SD-1 bass
   if(m3)bassCorner=juce::jmin(bassCorner,(720.f-350.f*a3)/capRatio);
   const float filtered=(sd?s.sdPre:s.tsPre).hp(x,bassCorner,rate);
-  const float amplified=filtered*(1.5f+18.f*drive*drive);
+  // TS/SD-1 feedback resistance controls the closed-loop gain. The
+  // nominal low-frequency gain is near unity; above the feedback HPF
+  // the small-signal gain can approach tens to >100 depending on the
+  // resistance setting. The diodes then dynamically reduce that gain.
+  const float feedbackGain=1.f+juce::jmin(100.f,100.f*drive*drive);
+  const float amplified=filtered*feedbackGain;
   // Stock SD-1 has asymmetrical clipping, stock TS symmetric.
   int diodeType=clipping;
   if(clipping==0 && sd)diodeType=3;
@@ -461,10 +471,10 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float feedbackOutput=solveFeedback(amplified,pair,sd?5.2f:4.3f);
   float& slew=sd?s.sdOpSlew:s.tsOpSlew;
   float& bandwidth=sd?s.sdOpBandwidth.z:s.tsOpBandwidth.z;
-  const float clipped=opAmpResponse(feedbackOutput,1.5f+18.f*drive*drive,
+  const float clipped=opAmpResponse(feedbackOutput,feedbackGain,
                                      rate,3000000.f,1000000.f,
                                      4.1f*railScale,3.9f*railScale,slew,bandwidth);
-  const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
+  const float clippedGain=clipped; // No artificial post-feedback gain division.
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
   const float cutoff=850.f*std::pow(12.f,tone)*(m4?(1.f+.5f*a4):1.f);
@@ -487,7 +497,7 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
  const float boostDb=v("tcBoostGain");
  const int model=juce::jlimit(0,10,(int)v("pedal")),mod=0; // Legacy argument retained; mods are independent booleans.
  for(int c=channels;c<2;++c)scratch.clear(c,0,count);
- for(int c=0;c<channels;++c){const float* src=buffer.getReadPointer(c);float* dst=scratch.getWritePointer(c);for(int i=0;i<count;++i)dst[i]=src[i]*in;}
+ for(int c=0;c<channels;++c){const float* src=buffer.getReadPointer(c);float* dst=scratch.getWritePointer(c);for(int i=0;i<count;++i)dst[i]=src[i]*in*voltsPerFullScale;}
  auto& os=*oversamplers[(size_t)osIndex];
  auto block=juce::dsp::AudioBlock<float>(scratch).getSubBlock(0,(size_t)count);
  juce::dsp::AudioBlock<const float> inputBlock(block);
@@ -502,7 +512,7 @@ void GuitarOverdriveProcessor::processChunk(juce::AudioBuffer<float>& buffer,int
    if(boostPosition==2)x=tcBoost(x,c,boostDb,rate,false,boostModel,boostMidOn,boostMidHz,boostMidDb);
    x=transformer(x,c,xfDrive,.5f,rate);
    x=s.outputHp.hp(x,oh,rate);
-   samples[i]=s.outputLp.lp(x,ol,rate);
+   samples[i]=s.outputLp.lp(x,ol,rate)*fullScalePerVolt;
   }
  }
  os.processSamplesDown(block);
