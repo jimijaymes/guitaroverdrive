@@ -107,6 +107,24 @@ float diodeFeedbackStage(float x,float strength,float positiveV,float negativeV)
  const int pos=positiveV>.9f?2:1,neg=negativeV>.9f?2:1;
  return solveFeedback(x,diodePair(0,pos,neg),strength);
 }
+// Generic simplified compensated op-amp response, before external
+// clipping devices. Keep independent state for each circuit/channel.
+float opAmpResponse(float target,float closedLoopGain,float rate,
+                    float gbwHz,float slewVoltsPerSecond,
+                    float positiveRail,float negativeRail,
+                    float& previous, float& bandwidthState)
+{
+ const float maxStep=slewVoltsPerSecond/rate;
+ const float slewed=previous+juce::jlimit(-maxStep,maxStep,target-previous);
+ const float cutoff=juce::jlimit(40.f,rate*.45f,
+                               gbwHz/juce::jmax(1.f,closedLoopGain));
+ const float a=coeff(cutoff,rate);
+ bandwidthState=a*bandwidthState+(1.f-a)*slewed;
+ const float limited=positiveRail*std::tanh(juce::jmax(0.f,bandwidthState)/positiveRail)
+                    +negativeRail*std::tanh(juce::jmin(0.f,bandwidthState)/negativeRail);
+ previous=limited;
+ return limited;
+}
 float discreteRail(float x,float positiveRail,float negativeRail)
 {
  // Soft onset as the transistor/output stage approaches its supply limits.
@@ -425,9 +443,18 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Use the exponential implicit feedback network for stock silicon
   // clipping. Explicit alternate diode selections keep their existing
   // user-selectable clipping behaviour.
-  const float clipped=solveFeedback(amplified,
-      clipping==0?diodePair(0,1,sd?2:1):diodePair(clipping),
-      sd?5.2f:4.3f);
+  // The external feedback diodes change the effective closed-loop gain:
+  // a higher-Vf substitution allows more gain before feedback conduction.
+  // The compensated amplifier then has finite bandwidth, slew rate and
+  // asymmetric output headroom. These are representative values, not
+  // measurements of every JRC4558 or replacement op-amp.
+  const auto pair=clipping==0?diodePair(0,1,sd?2:1):diodePair(clipping);
+  const float feedbackOutput=solveFeedback(amplified,pair,sd?5.2f:4.3f);
+  float& slew=sd?s.sdOpSlew:s.tsOpSlew;
+  float& bandwidth=sd?s.sdOpBandwidth.z:s.tsOpBandwidth.z;
+  const float clipped=opAmpResponse(feedbackOutput,1.5f+18.f*drive*drive,
+                                     rate,3000000.f,1000000.f,
+                                     4.1f,3.9f,slew,bandwidth);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
