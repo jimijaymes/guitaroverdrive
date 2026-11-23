@@ -29,11 +29,11 @@ private:
  struct OnePole {float z=0;float lp(float x,float hz,float sr);float hp(float x,float hz,float sr){return x-lp(x,hz,sr);}};
  struct State {
   OnePole inputHp,inputLp,outputHp,outputLp,preBass,preMid,preTop,feedback,ratTone,ratSlew;
-  OnePole muffOne,muffTwo,muffToneLow,muffToneHigh,tsTone,tsPre,sdPre;
+  OnePole muffOne,muffTwo,muffToneLow,muffToneHigh,tsTone,tsPre,sdPre,tsOpBandwidth,sdOpBandwidth;
   OnePole xfLow,xfHigh,xfLeak,boostPreHp,boostPreLp,boostPostHp,boostPostLp;
   OnePole newInput,newGain1,newGain2,newBass,newTreble,newMid,newPresence,newOutput;
   OnePole dsInput,dsCouple1,dsCouple2,dsCouple3,dsFeedbackHp,dsOpLow,dsClipLow,dsToneLow,dsToneHigh,dsOutput;
-  float flux=0,opamp=0,stage1=0,stage2=0;
+  float flux=0,opamp=0,stage1=0,stage2=0,tsOpSlew=0,sdOpSlew=0;
   float midPre1=0,midPre2=0,midPost1=0,midPost2=0;
   std::array<float,3> hm2EqIc1{},hm2EqIc2{};
  };
