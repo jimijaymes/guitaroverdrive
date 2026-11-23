@@ -53,6 +53,7 @@ DiodePair diodePair(int type,int stockPositive=1,int stockNegative=1)
  if(type==5)return {junction(0),junction(0),1,1,false};
  if(type==3)return {junction(0),junction(0),1,2,true};
  if(type==7)return {{2.30f,.11f,.17f},{2.30f,.11f,.17f},1,1,true};
+ if(type==10)return {junction(0),junction(1),2,1,true}; // two Si in series vs one LED
  const Junction j=junction(type);
  return {j,j,stockPositive,stockNegative,true};
 }
@@ -138,7 +139,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout GuitarOverdriveProcessor::la
  p.add(std::make_unique<C>(juce::ParameterID{"muffVersion",1},"Big Muff Version",juce::StringArray{"Triangle","Ram's Head"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"pedal",1},"Pedal",juce::StringArray{"RAT","Big Muff","Tube Screamer","Boss SD-1","DOD FX69 Grunge","DOD FX86 Death Metal","Boss BD-2","Boss DS-1","Boss OD-2","Boss HM-2","Boss SD-2"},0));
  for(int i=1;i<=4;++i){const auto id="mod"+juce::String(i);p.add(std::make_unique<B>(juce::ParameterID{id,1},"Mod "+juce::String(i),false));}
- p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair"},0));
+ p.add(std::make_unique<C>(juce::ParameterID{"clipping",1},"Clipping",juce::StringArray{"Follow Design","LED Pair","Germanium Pair","Asymmetric Si","MOSFET-inspired","No Diodes","Schottky Pair","Si + LED Series (Symmetric)","Low-Vf Silicon Pair","High-Vf Silicon Pair","2x Silicon / 1x LED (Asymmetric)"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"transformer",1},"Transformer",juce::StringArray{"Off","Neve 10468 Input","Neve LO1166 Output","API 2622 + 2520","API 2520 + 2503","1176 UTC Input","1176 Class A Output","1176 Rev F Output"},0));
  p.add(std::make_unique<C>(juce::ParameterID{"oversampling",1},"Oversampling",juce::StringArray{"1x","2x","4x","8x"},2));
  return p;
@@ -211,7 +212,7 @@ float GuitarOverdriveProcessor::tcBoost(float x,int channel,float boostDb,float 
 }
 float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone,float level,int model,int mod,float amount,float modTone,float modBass,float rate){
  auto& s=states[(size_t)channel];
- const int clipping=juce::jlimit(0,9,(int)parameters.getRawParameterValue("clipping")->load());
+ const int clipping=juce::jlimit(0,10,(int)parameters.getRawParameterValue("clipping")->load());
  const bool m1=parameters.getRawParameterValue("mod1")->load()>.5f;
  const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
@@ -423,7 +424,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // clipping. Explicit alternate diode selections keep their existing
   // user-selectable clipping behaviour.
   const float clipped=solveFeedback(amplified,
-      clipping==0?diodePair(0,1,sd?2:1):diodePair(diodeType),
+      clipping==0?diodePair(0,1,sd?2:1):diodePair(clipping),
       sd?5.2f:4.3f);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
