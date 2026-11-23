@@ -29,52 +29,86 @@ float clip(float x,int type);
 // The scaling is calibrated in normalized audio units, not literal volts.
 // Asymmetric mode uses one silicon junction in one direction and two in
 // series in the other, as in the stock SD-1 feedback network.
-float diodeFeedbackStage(float excitation,float strength,float positiveV,float negativeV)
+// Diode substitutions are circuit components, not a post-clipping waveshaper.
+// Model each antiparallel branch by a Shockley-inspired I/V curve, with
+// per-direction junction count and approximate dynamic series resistance.
+// Audio units correspond to volts at the diode node; these are calibrated
+// approximations, not extracted SPICE parameters for individual devices.
+struct Junction {float vf,thermal,series;};
+Junction junction(int type)
 {
- const float extent=juce::jmax(1.f,std::abs(excitation));
- float lo=-extent,hi=extent;
- for(int i=0;i<18;++i)
- {
+ switch(type) {
+ case 1:return {1.65f,.090f,.13f};  // red LED
+ case 2:return {.28f,.045f,.045f}; // germanium
+ case 4:return {1.05f,.075f,.12f}; // MOSFET body-diode inspired
+ case 6:return {.31f,.040f,.035f}; // Schottky
+ case 8:return {.48f,.052f,.055f}; // low-Vf silicon
+ case 9:return {.81f,.060f,.075f}; // high-Vf silicon
+ default:return {.65f,.055f,.065f}; // silicon
+ }
+}
+struct DiodePair {Junction pos,neg;int posCount,negCount;bool enabled;};
+DiodePair diodePair(int type,int stockPositive=1,int stockNegative=1)
+{
+ if(type==5)return {junction(0),junction(0),1,1,false};
+ if(type==3)return {junction(0),junction(0),1,2,true};
+ if(type==7)return {{2.30f,.11f,.17f},{2.30f,.11f,.17f},1,1,true};
+ const Junction j=junction(type);
+ return {j,j,stockPositive,stockNegative,true};
+}
+float diodeCurrent(float voltage,const DiodePair& pair)
+{
+ if(!pair.enabled)return 0.f;
+ const bool positive=voltage>=0.f;
+ const auto& j=positive?pair.pos:pair.neg;
+ const float count=(float)(positive?pair.posCount:pair.negCount);
+ const float magnitude=std::abs(voltage);
+ // Finite slope even at high current: approximate diode dynamic and
+ // wiring resistance without exponential overflow.
+ const float vt=j.thermal*count;
+ const float knee=.62f*j.vf*count;
+ const float excess=juce::jmax(0.f,magnitude-knee);
+ const float nonlinear=vt*std::expm1(juce::jmin(12.f,excess/juce::jmax(.005f,vt)));
+ const float current=nonlinear/(1.f+j.series*nonlinear);
+ return std::copysign(current,voltage);
+}
+// Implicit negative-feedback diode network, used by TS, SD-1 and
+// transistor collector/base feedback stages of the Big Muff.
+float solveFeedback(float excitation,const DiodePair& pair,float strength)
+{
+ if(!pair.enabled)return excitation;
+ const float bound=juce::jmax(1.f,std::abs(excitation));
+ float lo=-bound,hi=bound;
+ for(int i=0;i<22;++i) {
   const float v=.5f*(lo+hi);
-  const float threshold=v>=0.f?positiveV:negativeV;
-  const float thermal=.055f*(threshold/.65f);
-  const float excess=juce::jmax(0.f,std::abs(v)-threshold*.65f);
-  const float conduction=thermal*std::expm1(juce::jmin(16.f,excess/thermal));
-  const float residual=v+std::copysign(strength*conduction,v)-excitation;
-  if(residual>0.f)hi=v;else lo=v;
+  if(v+strength*diodeCurrent(v,pair)>excitation)hi=v;else lo=v;
  }
  return .5f*(lo+hi);
 }
-// Feedback-network approximation: the diodes shunt gain around the active
-// device instead of hard-limiting the signal at the output node. Solve the
-// monotonic nonlinear transfer by bisection; bounded iterations and no state.
-float feedbackClip(float excitation,int type,float feedbackStrength){
- if(type==5)return excitation;
- // Feedback diode conduction is monotonic; bracket the actual solution.
- // The previous fixed [-1,+1] bracket saturated high-level inputs even
- // when the chosen diode threshold was much higher.
- const float extent=juce::jmax(1.f,std::abs(excitation));
- float lo=-extent,hi=extent;
- for(int i=0;i<20;++i){
-  const float mid=.5f*(lo+hi);
-  const float residual=mid+feedbackStrength*(mid-clip(mid,type))-excitation;
-  if(residual>0.f)hi=mid;else lo=mid;
- }
- return .5f*(lo+hi);
+// Diodes connected from signal to ground (RAT, DS-1, BD-2 interstage).
+// The source resistance changes the resulting knee and output level.
+float solveShunt(float excitation,const DiodePair& pair,float sourceResistance)
+{
+ return solveFeedback(excitation,pair,sourceResistance);
 }
-float clip(float x,int type){
- switch(type){
- case 1:return diode(x,1.7f,1.7f); // LED
- case 2:return diode(x,.32f,.32f); // germanium
- case 3:return diode(x,.65f,1.3f); // asymmetric
- case 4:return diode(x,1.05f,1.05f); // MOSFET-inspired threshold
- case 5:return x;
- case 6:return diode(x,.36f,.36f); // optional Schottky-like low-Vf
- case 7:return diode(x,2.35f,2.35f); // symmetric Si+LED series string each polarity
- case 8:return diode(x,.48f,.48f); // low-forward silicon alternative
- case 9:return diode(x,.82f,.82f); // higher-forward silicon alternative
- default:return diode(x,.65f,.65f);
- }
+float clip(float x,int type)
+{
+ return solveShunt(x,diodePair(type),2.8f);
+}
+float feedbackClip(float x,int type,float strength)
+{
+ return solveFeedback(x,diodePair(type),strength);
+}
+float diodeFeedbackStage(float x,float strength,float positiveV,float negativeV)
+{
+ const int pos=positiveV>.9f?2:1,neg=negativeV>.9f?2:1;
+ return solveFeedback(x,diodePair(0,pos,neg),strength);
+}
+float discreteRail(float x,float positiveRail,float negativeRail)
+{
+ // Soft onset as the transistor/output stage approaches its supply limits.
+ const float rail=x>=0.f?positiveRail:negativeRail;
+ return rail*std::tanh(x/juce::jmax(.1f,rail));
 }
 }
 float GuitarOverdriveProcessor::OnePole::lp(float x,float hz,float sr){
@@ -213,7 +247,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float gbwHz=500000.f;
   const float closedLoopBandwidth=juce::jlimit(120.f,rate*.45f,gbwHz/juce::jmax(1.f,opGain));
   s.opamp=s.ratSlew.lp(slewLimited,closedLoopBandwidth,rate);
-  const float op=juce::jlimit(-4.f,4.f,s.opamp);
+  const float op=discreteRail(s.opamp,4.0f,3.7f);
   const int diodeType=clipping;
   y=clip(op,diodeType);
   // RAT Filter rotates clockwise towards darker sound.
@@ -232,10 +266,12 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float booster=s.preTop.lp(pre,ram?9200.f:12500.f,rate)*(ram?1.75f:2.05f);
   const float a=s.muffOne.lp(booster,ram?4900.f:6700.f,rate)
       *(ram?2.8f+11.f*drive:3.2f+13.f*drive);
-  const float first=clipping==0?vintageSilicon(a,ram?.68f:.64f,ram?.22f:.18f):feedbackClip(a,clipping,ram?3.4f:3.0f);
+  // The Muff's clipping diodes connect collector-to-base in each
+  // transistor stage. Stock and substitutions must use that topology.
+  const float first=solveFeedback(discreteRail(a,3.8f,3.1f),diodePair(clipping),ram?3.4f:3.0f);
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
-  const float second=clipping==0?vintageSilicon(b,ram?.66f:.63f,ram?.20f:.17f):feedbackClip(b,clipping,ram?3.8f:3.2f);
+  const float second=solveFeedback(discreteRail(b,3.8f,3.1f),diodePair(clipping),ram?3.8f:3.2f);
   const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*(m3?a3:0.f),rate);
   const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*(m4?a4:0.f),rate);
   const float scoop=m2?(.15f+.85f*a2):(m4?.15f:1.f);
@@ -273,8 +309,13 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    const float high=b-s.newTreble.lp(b,1800.f+3900.f*treble,rate);
    y=low*(.25f+1.5f*bass)+high*(.2f+1.6f*treble);
   }else if(model==6){ // BD-2: two cascaded nonlinear feedback gain sections
-   a=feedbackClip(filtered*(1.2f+10.f*drive),clipping==0?(modCircuit>0?3:0):clipping,2.3f);
-   b=feedbackClip(s.newGain2.lp(a,12500.f,rate)*(1.4f+5.f*drive),clipping==0?(modCircuit>0?3:0):clipping,2.8f);
+   // BD-2: two cascaded discrete JFET/PNP amplifier stages with
+   // interstage back-to-back TWO-silicon-junction strings. The diode
+   // substitution changes this shunt node, not the gain feedback.
+   const float stageOne=discreteRail(filtered*(1.2f+10.f*drive),3.5f,3.1f);
+   const float interstage=solveShunt(stageOne,diodePair(clipping,2,2),2.0f);
+   a=interstage;
+   b=discreteRail(s.newGain2.lp(interstage,12500.f,rate)*(1.4f+5.f*drive),3.5f,3.1f);
    y=s.newTreble.lp(b,(modCircuit>0?850.f:1100.f)+12500.f*tone*(1.f+.4f*bright),rate);
    y=.14f*x+.86f*y;
   }else if(model==7){ // DS-1: component-derived modern DS-1A signal path
@@ -300,7 +341,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    const float opGain=1.f+21.2766f*drive;
    const float opOut=s.dsOpLow.lp(opInput+(opGain-1.f)*feedbackHigh,
                                 18000.f,rate);
-   const float railLimited=juce::jlimit(-4.f,4.f,opOut);
+   const float railLimited=discreteRail(opOut,4.0f,3.7f);
    // D4/D5 shunt-to-ground clipper, AFTER R14/C10; diode override
    // replaces these devices rather than adding another clip stage.
    // Seeing Eye: silicon + red LED. Ultra: Si+LED series / red LED.
@@ -381,9 +422,9 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // Use the exponential implicit feedback network for stock silicon
   // clipping. Explicit alternate diode selections keep their existing
   // user-selectable clipping behaviour.
-  const float clipped=clipping==0
-      ? diodeFeedbackStage(amplified,sd?0.55f:0.48f,.65f,sd?1.30f:.65f)
-      : feedbackClip(amplified,diodeType,sd?5.2f:4.3f);
+  const float clipped=solveFeedback(amplified,
+      clipping==0?diodePair(0,1,sd?2:1):diodePair(diodeType),
+      sd?5.2f:4.3f);
   const float clippedGain=clipped/juce::jmax(.25f,1.f+drive*1.5f);
   y=.22f*x+.78f*clippedGain;
   if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
