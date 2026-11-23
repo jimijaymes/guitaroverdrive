@@ -271,6 +271,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float gbwHz=500000.f;
   const float closedLoopBandwidth=juce::jlimit(120.f,rate*.45f,gbwHz/juce::jmax(1.f,opGain));
   s.opamp=s.ratSlew.lp(slewLimited,closedLoopBandwidth,rate);
+  // Supply changes the onset of LM308 output compression, not its
+  // feedback-set small-signal gain or slew/GBW characteristics.
   const float op=discreteRail(s.opamp,4.0f*railScale,3.7f*railScale);
   const int diodeType=clipping;
   y=clip(op,diodeType);
@@ -454,6 +456,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // asymmetric output headroom. These are representative values, not
   // measurements of every JRC4558 or replacement op-amp.
   const auto pair=clipping==0?diodePair(0,1,sd?2:1):diodePair(clipping);
+  // Feedback diodes determine the nonlinear gain reduction. Rail
+  // limitations occur at the amplifier output, after that feedback solve.
   const float feedbackOutput=solveFeedback(amplified,pair,sd?5.2f:4.3f);
   float& slew=sd?s.sdOpSlew:s.tsOpSlew;
   float& bandwidth=sd?s.sdOpBandwidth.z:s.tsOpBandwidth.z;
