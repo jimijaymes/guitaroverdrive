@@ -407,14 +407,21 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   }else if(model==8){ // OD-2: switched independent normal and turbo paths
    const float pot=250000.f*drive*drive;
    if(dual){
-    // Turbo discrete stages run from a regulated ~5.6 V rail.
-    // No stock signal clipping diodes in this path; override is ignored.
+    // Stock Turbo uses a regulated 5.6 V supply. Higher settings model
+    // a virtual regulator bypass and rebiased 12/18 V amplifier supply.
+    const float turboSupply=supplyChoice==0?5.6f:supply;
+    const float turboExtra=.5f*(turboSupply-5.6f);
+    const float turboPos=2.5f+turboExtra,turboNeg=2.2f+turboExtra;
     const float g1=1.f+pot/4700.f;
     const float v1=pre+(g1-1.f)*s.newGain1.hp(pre,90.f,rate);
-    const float first=discreteRail(v1,2.5f,2.2f);
+    const float first=discreteRail(v1,turboPos,turboNeg);
     const float coupled=s.newGain2.hp(s.newMid.lp(first,7200.f,rate),100.f,rate);
     const float v2=coupled+57.f*s.newPresence.hp(coupled,120.f,rate);
-    b=discreteRail(v2,2.5f,2.2f);
+    b=discreteRail(v2,turboPos,turboNeg);
+    // Optional AC-referenced shunt diode mod after the second amplifier.
+    // Stock and No Diodes retain the original discrete-only clipping.
+    if(clipping!=0 && clipping!=5)
+     b=solveShunt(b,diodePair(clipping),2.8f);
    }else{
     // Normal: asymmetric diodes across the discrete amplifier feedback.
     const float g=1.f+pot/4700.f;
