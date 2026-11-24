@@ -77,7 +77,7 @@ float diodeCurrent(float voltage,const DiodePair& pair)
  const float knee=.62f*j.vf*count;
  const float excess=juce::jmax(0.f,magnitude-knee);
  const float nonlinear=vt*std::expm1(juce::jmin(12.f,excess/juce::jmax(.005f,vt)));
- const float current=nonlinear/(1.f+j.series*nonlinear);
+ const float current=nonlinear/(1.f+j.series*nonlinear)+excess*excess/(1.f+excess)*.25f;
  return std::copysign(current,voltage);
 }
 // Implicit negative-feedback diode network, used by TS, SD-1 and
@@ -125,8 +125,11 @@ float opAmpResponse(float target,float closedLoopGain,float rate,
                                gbwHz/juce::jmax(1.f,closedLoopGain));
  const float a=coeff(cutoff,rate);
  bandwidthState=a*bandwidthState+(1.f-a)*slewed;
- const float limited=positiveRail*std::tanh(juce::jmax(0.f,bandwidthState)/positiveRail)
-                    +negativeRail*std::tanh(juce::jmin(0.f,bandwidthState)/negativeRail);
+ const float rail=bandwidthState>=0.f?positiveRail:negativeRail;
+ const float knee=.85f*rail;
+ const float mag=std::abs(bandwidthState);
+ const float limited=std::copysign(mag<=knee?mag:knee+(rail-knee)*std::tanh((mag-knee)/(rail-knee)),bandwidthState);
+ bandwidthState=juce::jlimit(-negativeRail,positiveRail,bandwidthState);
  previous=limited;
  return limited;
 }
@@ -240,7 +243,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
  auto& s=states[(size_t)channel];
  const int clipping=juce::jlimit(0,11,(int)parameters.getRawParameterValue("clipping")->load());
  const int supplyChoice=juce::jlimit(0,2,(int)parameters.getRawParameterValue("supplyVoltage")->load());
- const float railScale=supplyChoice==0?1.f:(supplyChoice==1?12.f/9.f:2.f);
+ const float supply=supplyChoice==0?9.f:(supplyChoice==1?12.f:18.f);
+ const float extraSwing=(supply-9.f)*.5f;
  const bool m1=parameters.getRawParameterValue("mod1")->load()>.5f;
  const bool m2=parameters.getRawParameterValue("mod2")->load()>.5f;
  const bool m3=parameters.getRawParameterValue("mod3")->load()>.5f;
@@ -278,7 +282,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   s.opamp=s.ratSlew.lp(slewLimited,closedLoopBandwidth,rate);
   // Supply changes the onset of LM308 output compression, not its
   // feedback-set small-signal gain or slew/GBW characteristics.
-  const float op=discreteRail(s.opamp,4.0f*railScale,3.7f*railScale);
+  const float op=discreteRail(s.opamp,(4.0f+extraSwing),(3.7f+extraSwing));
   const int diodeType=clipping;
   y=clip(op,diodeType);
   // RAT Filter rotates clockwise towards darker sound.
@@ -299,10 +303,10 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
       *(ram?2.8f+11.f*drive:3.2f+13.f*drive);
   // The Muff's clipping diodes connect collector-to-base in each
   // transistor stage. Stock and substitutions must use that topology.
-  const float first=solveFeedback(discreteRail(a,3.8f*railScale,3.1f*railScale),diodePair(clipping),ram?3.4f:3.0f);
+  const float first=solveFeedback(discreteRail(a,(3.8f+extraSwing),(3.1f+extraSwing)),diodePair(clipping),ram?3.4f:3.0f);
   const float b=s.muffTwo.lp(first,ram?3700.f:5200.f,rate)
       *(ram?2.7f+8.5f*drive:3.0f+10.f*drive);
-  const float second=solveFeedback(discreteRail(b,3.8f*railScale,3.1f*railScale),diodePair(clipping),ram?3.8f:3.2f);
+  const float second=solveFeedback(discreteRail(b,(3.8f+extraSwing),(3.1f+extraSwing)),diodePair(clipping),ram?3.8f:3.2f);
   const float low=s.muffToneLow.lp(second,(ram?365.f:470.f)+220.f*(m3?a3:0.f),rate);
   const float high=second-s.muffToneHigh.lp(second,(ram?1050.f:820.f)+800.f*(m4?a4:0.f),rate);
   const float scoop=m2?(.15f+.85f*a2):(m4?.15f:1.f);
@@ -327,7 +331,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const float pre=s.newInput.hp(x,hpf[idx]*(1.f-.65f*fat)*circuitBass,rate);
   const float filtered=s.newGain1.lp(pre,lpf[idx]*(1.f+.28f*bright),rate);
   // Stage headroom grows with supply; diode forward voltages do not.
-  const auto activeStage=[railScale](float v){return discreteRail(v,3.9f*railScale,3.5f*railScale);};
+  const auto activeStage=[extraSwing](float v){return discreteRail(v,(3.9f+extraSwing),(3.5f+extraSwing));};
   float a=0.f,b=0.f;
   if(model==4){ // DOD FX69 Grunge: cascaded high gain, scooped active-like tone
    a=feedbackClip(activeStage(filtered*(3.f+29.f*drive)),clipping==0?3:clipping,3.2f);
@@ -345,10 +349,10 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    // BD-2: two cascaded discrete JFET/PNP amplifier stages with
    // interstage back-to-back TWO-silicon-junction strings. The diode
    // substitution changes this shunt node, not the gain feedback.
-   const float stageOne=discreteRail(filtered*(1.2f+10.f*drive),3.5f*railScale,3.1f*railScale);
+   const float stageOne=discreteRail(filtered*(1.2f+10.f*drive),(3.5f+extraSwing),(3.1f+extraSwing));
    const float interstage=solveShunt(stageOne,diodePair(clipping,2,2),2.0f);
    a=interstage;
-   b=discreteRail(s.newGain2.lp(interstage,12500.f,rate)*(1.4f+5.f*drive),3.5f*railScale,3.1f*railScale);
+   b=discreteRail(s.newGain2.lp(interstage,12500.f,rate)*(1.4f+5.f*drive),(3.5f+extraSwing),(3.1f+extraSwing));
    y=s.newTreble.lp(b,(modCircuit>0?850.f:1100.f)+12500.f*tone*(1.f+.4f*bright),rate);
    y=.14f*x+.86f*y;
   }else if(model==7){ // DS-1: component-derived modern DS-1A signal path
@@ -365,8 +369,8 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    // the selected component patch explicitly requires a change.
    const float q2Gain=56.f;
    const float q2Input=bassCut*q2Gain;
-   const float q2= q2Input>=0.f?(4.f*railScale)*std::tanh(q2Input/(4.f*railScale))
-                               :(3.f*railScale)*std::tanh(q2Input/(3.f*railScale));
+   const float q2= q2Input>=0.f?((4.f+extraSwing))*std::tanh(q2Input/((4.f+extraSwing)))
+                               :((3.f+extraSwing))*std::tanh(q2Input/((3.f+extraSwing)));
    const float opInput=s.dsCouple3.hp(q2,23.f,rate);
    // Non-inverting stage: low frequencies pass with gain 1, high
    // frequencies receive the gain-dependent feedback boost.
@@ -374,7 +378,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    const float opGain=1.f+21.2766f*drive;
    const float opOut=s.dsOpLow.lp(opInput+(opGain-1.f)*feedbackHigh,
                                 18000.f,rate);
-   const float railLimited=discreteRail(opOut,4.0f*railScale,3.7f*railScale);
+   const float railLimited=discreteRail(opOut,(4.0f+extraSwing),(3.7f+extraSwing));
    // D4/D5 shunt-to-ground clipper, AFTER R14/C10; diode override
    // replaces these devices rather than adding another clip stage.
    // Seeing Eye: silicon + red LED. Ultra: Si+LED series / red LED.
@@ -450,7 +454,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   // the small-signal gain can approach tens to >100 depending on the
   // resistance setting. The diodes then dynamically reduce that gain.
   const float feedbackGain=1.f+juce::jmin(100.f,100.f*drive*drive);
-  const float amplified=filtered*feedbackGain;
+  const float amplified=x+filtered*(feedbackGain-1.f);
   // Stock SD-1 has asymmetrical clipping, stock TS symmetric.
   int diodeType=clipping;
   if(clipping==0 && sd)diodeType=3;
@@ -468,15 +472,15 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const auto pair=clipping==0?diodePair(0,1,sd?2:1):diodePair(clipping);
   // Feedback diodes determine the nonlinear gain reduction. Rail
   // limitations occur at the amplifier output, after that feedback solve.
-  const float feedbackOutput=solveFeedback(amplified,pair,sd?5.2f:4.3f);
+  const float feedbackOutput=x+solveFeedback(amplified-x,pair,sd?5.2f:4.3f);
   float& slew=sd?s.sdOpSlew:s.tsOpSlew;
   float& bandwidth=sd?s.sdOpBandwidth.z:s.tsOpBandwidth.z;
   const float clipped=opAmpResponse(feedbackOutput,feedbackGain,
                                      rate,3000000.f,1000000.f,
-                                     4.1f*railScale,3.9f*railScale,slew,bandwidth);
+                                     (4.1f+extraSwing),(3.9f+extraSwing),slew,bandwidth);
   const float clippedGain=clipped; // No artificial post-feedback gain division.
-  y=.22f*x+.78f*clippedGain;
-  if(m2&&!sd)y=.27f*x+.73f*clippedGain; // TS808-style response
+  y=clippedGain; // Unity path already present in feedback topology.
+  if(m2&&!sd)y=.95f*y+.05f*x; // Retain legacy mod voicing.
   const float cutoff=850.f*std::pow(12.f,tone)*(m4?(1.f+.5f*a4):1.f);
   y=s.tsTone.lp(y,cutoff,rate);
   if(m1&&sd)y=s.preMid.lp(y,8500.f-3500.f*a1,rate); // C6 mod
