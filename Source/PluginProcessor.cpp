@@ -329,7 +329,7 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
   const int idx=model-4;
   const float circuitBass=(model==7 && modCircuit>0)?0.70f:(model==6 && modCircuit>0?0.76f:1.f);
   const float pre=s.newInput.hp(x,hpf[idx]*(1.f-.65f*fat)*circuitBass,rate);
-  const float filtered=s.newGain1.lp(pre,lpf[idx]*(1.f+.28f*bright),rate);
+  const float filtered=(model==6||model==8)?pre:s.newGain1.lp(pre,lpf[idx]*(1.f+.28f*bright),rate);
   // Stage headroom grows with supply; diode forward voltages do not.
   const auto activeStage=[extraSwing](float v){return discreteRail(v,(3.9f+extraSwing),(3.5f+extraSwing));};
   float a=0.f,b=0.f;
@@ -345,16 +345,25 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    const float low=s.newBass.lp(b,180.f+420.f*bass,rate);
    const float high=b-s.newTreble.lp(b,1800.f+3900.f*treble,rate);
    y=low*(.25f+1.5f*bass)+high*(.2f+1.6f*treble);
-  }else if(model==6){ // BD-2: two cascaded nonlinear feedback gain sections
-   // BD-2: two cascaded discrete JFET/PNP amplifier stages with
-   // interstage back-to-back TWO-silicon-junction strings. The diode
-   // substitution changes this shunt node, not the gain feedback.
-   const float stageOne=discreteRail(filtered*(1.2f+10.f*drive),(3.5f+extraSwing),(3.1f+extraSwing));
-   const float interstage=solveShunt(stageOne,diodePair(clipping,2,2),2.0f);
-   a=interstage;
-   b=discreteRail(s.newGain2.lp(interstage,12500.f,rate)*(1.4f+5.f*drive),(3.5f+extraSwing),(3.1f+extraSwing));
-   y=s.newTreble.lp(b,(modCircuit>0?850.f:1100.f)+12500.f*tone*(1.f+.4f*bright),rate);
-   y=.14f*x+.86f*y;
+  }else if(model==6){ // BD-2: two discrete feedback amplifiers and loaded interstage
+   // Reduced-order circuit model; original DSP, not a transistor SPICE solve.
+   const float pot=250000.f*drive*drive;
+   const float g1=1.f+(22000.f+pot)/1500.f;
+   const float g2=1.f+(33000.f+pot)/2200.f;
+   const float v1=pre+(g1-1.f)*s.newGain1.hp(pre,70.7f,rate);
+   const float first=discreteRail(v1,3.7f+extraSwing,3.3f+extraSwing);
+   // Approximate loaded bass/treble paths around the interstage diode node.
+   const float low=s.newBass.lp(first,188.f,rate);
+   const float high=s.newMid.hp(first,2192.f,rate);
+   const float node=.153f*first+.62f*low+.14f*high;
+   const float clipped=solveShunt(node,diodePair(clipping,2,2),2.f);
+   const float coupled=s.newGain2.hp(clipped,72.3f,rate);
+   const float v2=coupled+(g2-1.f)*s.newPresence.hp(coupled,72.3f,rate);
+   const float second=discreteRail(v2,3.8f+extraSwing,3.4f+extraSwing);
+   // Passive tone approximation followed by the output gyrator bass peak.
+   const float toned=s.newTreble.lp(second,500.f*std::pow(30.f,tone),rate);
+   const float bassPeak=s.dsToneLow.lp(s.dsToneHigh.hp(toned,95.f,rate),180.f,rate);
+   y=.33f*toned+.30f*bassPeak;
   }else if(model==7){ // DS-1: component-derived modern DS-1A signal path
    // ElectroSmash DS-1 analysis: input 7.2 Hz, C2/R4 3.3 Hz,
    // C3/R5 33 Hz, C5/R10 23 Hz; Q2 ~56x (35 dB);
@@ -395,11 +404,25 @@ float GuitarOverdriveProcessor::pedal(float x,int channel,float drive,float tone
    // Approximate nominal 12 dB passive insertion loss.
    y=.25f*passiveBlend;
    y=s.dsOutput.hp(y,3.4f,rate);
-  }else if(model==8){ // OD-2: normal and turbo use different gain distribution
-   const float first=dual?2.8f+12.f*drive:1.5f+7.f*drive;
-   a=feedbackClip(activeStage(filtered*first),clipping==0?3:clipping,dual?4.2f:2.8f);
-   b=dual?feedbackClip(s.newGain2.hp(a,140.f,rate)*(2.5f+8.f*drive),clipping==0?3:clipping,4.8f):a;
-   y=s.newTreble.lp(.17f*x+.83f*b,900.f+11000.f*tone,rate);
+  }else if(model==8){ // OD-2: switched independent normal and turbo paths
+   const float pot=250000.f*drive*drive;
+   if(dual){
+    // Turbo discrete stages run from a regulated ~5.6 V rail.
+    // No stock signal clipping diodes in this path; override is ignored.
+    const float g1=1.f+pot/4700.f;
+    const float v1=pre+(g1-1.f)*s.newGain1.hp(pre,90.f,rate);
+    const float first=discreteRail(v1,2.5f,2.2f);
+    const float coupled=s.newGain2.hp(s.newMid.lp(first,7200.f,rate),100.f,rate);
+    const float v2=coupled+57.f*s.newPresence.hp(coupled,120.f,rate);
+    b=discreteRail(v2,2.5f,2.2f);
+   }else{
+    // Normal: asymmetric diodes across the discrete amplifier feedback.
+    const float g=1.f+pot/4700.f;
+    const float boosted=(g-1.f)*s.newGain2.hp(pre,340.f,rate);
+    const auto pair=clipping==0?diodePair(0,1,2):diodePair(clipping);
+    b=discreteRail(pre+solveFeedback(boosted,pair,3.2f),3.7f+extraSwing,3.3f+extraSwing);
+   }
+   y=s.newTreble.lp(b,620.f*std::pow(22.f,tone),rate)*.65f;
   }else if(model==9){ // HM-2: high-gain stages plus resonant dual-band EQ
    a=feedbackClip(activeStage(filtered*(3.f+24.f*drive)),clipping==0?3:clipping,4.5f);
    b=clip(s.newGain2.lp(a*(2.5f+8.f*drive),6500.f,rate),clipping);
